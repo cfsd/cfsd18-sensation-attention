@@ -24,6 +24,7 @@
 #include <Eigen/Dense>
 #include "cluon-complete.hpp"
 #include "opendlv-standard-message-set.hpp"
+#include "cone.hpp"
 
 
 class Attention {
@@ -90,6 +91,11 @@ class Attention {
   double m_dotThreshold;
   uint32_t m_senderStamp = 0;
   Eigen::MatrixXd m_lastBestPlane;
+
+  std::vector<std::pair<bool, Cone>> m_coneFrame = {};
+
+  int m_validCones = 0;
+  int m_count = 0;
   
 
 

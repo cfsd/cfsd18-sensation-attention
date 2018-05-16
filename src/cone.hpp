@@ -24,36 +24,41 @@
 #include <cmath>
 #include <vector>
 #include <Eigen/Dense>
-#include "opendlv-standard-message-set.hpp"
 
 class Cone{
   public:
-    Cone(double x, double y,int type,int id);
+    Cone(double x, double y, double z);
     ~Cone() = default;
     
-    opendlv::logic::perception::ObjectDirection getDirection(Eigen::Vector3d pose);
-    opendlv::logic::perception::ObjectDistance getDistance(Eigen::Vector3d pose);
-    
-    
+
+
+
     double getX();
     double getY();
-    int getType();
-    int getId();
-    
+    double getZ();
     void setX(double x);
     void setY(double y);
-    void setType(int type);
-    void setId(int id);
-
-
+    void setZ(double z);
+    void addHit();
+    int getHits();
+    void addMiss();
+    int getMisses();
+    bool isThisMe(double x, double y);
+    bool shouldBeInFrame();
+    bool shouldBeRemoved();
+    void setValidState(bool state);
+    bool isValid();
 
   private:
     double m_x;
     double m_y;
-    int m_type;
-    int m_id;
+    double m_z;
+    int m_hits;
+    int m_missHit;
+    bool m_isValid;
     const double RAD2DEG = 57.295779513082325; // 1.0 / DEG2RAD;
 
 };
 
 #endif
+

@@ -26,7 +26,7 @@ services:
         image: "attention:test"
         network_mode: "host"
         ipc: host
-        command: "cfsd18-sensation-attention --cid=${CID} --verbose --id=1 --xBoundary=2 --yBoundary=10 --groundLayerZ=-0.17 --coneHeight=0.4 --connectDistanceThreshold=0.8 --layerRangeThreshold=0.06 --minNumOfPointsForCone=2 --maxNumOfPointsForCone=80 --farConeRadiusThreshold=0.2 --nearConeRadiusThreshold=0.25 --zRangeThreshold=0.08 --inlierRangeThreshold=0.1 --dotThreshold=0.3 --inlierFoundThreshold=80 --numberOfIterations=10"
+        command: "cfsd18-sensation-attention --cid=${CID} --verbose --id=1 --xBoundary=4 --yBoundary=12 --groundLayerZ=-0.3 --coneHeight=1 --connectDistanceThreshold=0.4 --layerRangeThreshold=0.06 --minNumOfPointsForCone=2 --maxNumOfPointsForCone=80 --farConeRadiusThreshold=0.2 --nearConeRadiusThreshold=0.25 --zRangeThreshold=0.08 --inlierRangeThreshold=0.06 --dotThreshold=0.1 --inlierFoundThreshold=150 --numberOfIterations=10"
 
 #    proxy-velodyne16:
 #        image: chalmersrevere/opendlv-device-lidar-vlp16-multi:v0.0.6

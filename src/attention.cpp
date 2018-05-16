@@ -70,7 +70,8 @@ void Attention::nextContainer(cluon::data::Envelope data)
       std::lock_guard<std::mutex> lockCPC(m_cpcMutex);
       opendlv::proxy::PointCloudReading pointCloud = cluon::extractMessage<opendlv::proxy::PointCloudReading>(std::move(data));
 
-	    cluon::data::TimeStamp TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
+	    //cluon::data::TimeStamp TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
+      auto start = std::chrono::system_clock::now();
       SavePointCloud(pointCloud);
 
       if(m_pointCloud.rows() > 20000){
@@ -78,10 +79,13 @@ void Attention::nextContainer(cluon::data::Envelope data)
       }else{
         std::cout << "Point cloud size not sufficient, size is: " << m_pointCloud.rows() << std::endl;
       }
-      cluon::data::TimeStamp TimeAfterAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
-      double timeForProcessingOneScan = static_cast<double>(TimeAfterAlgorithm.microseconds()-TimeBeforeAlgorithm.microseconds())/1000000.0;
-      m_algorithmTime = timeForProcessingOneScan;
-      std::cout << "Time for processing one scan of data is: " << timeForProcessingOneScan << "s" << std::endl;
+      auto end = std::chrono::system_clock::now();
+      std::chrono::duration<double> diff = end-start;
+      //cluon::data::TimeStamp TimeAfterAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
+      //std::cout << "before: " << TimeBeforeAlgorithm.microseconds() << "after: " << TimeAfterAlgorithm.microseconds() << std::endl;
+      //double timeForProcessingOneScan = static_cast<double>(TimeAfterAlgorithm.microseconds()-TimeBeforeAlgorithm.microseconds())/1000000.0;
+     // m_algorithmTime = timeForProcessingOneScan;
+      std::cout << "Time for processing one scan of data is: " << diff.count() << "s" << std::endl;
     }
   }
 }
@@ -369,9 +373,21 @@ double Attention::CalculateXYDistance(Eigen::MatrixXd &pointCloud, const uint32_
 
 void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &coneIndexList)
 {
-
+  int m = 0;
+  double posShiftX = 0;
+  double posShiftY = 0;
   uint32_t numberOfCones = coneIndexList.size();
-  Eigen::MatrixXd conePoints = Eigen::MatrixXd::Zero(numberOfCones,3);
+  std::vector<uint32_t> removeIndex;
+  //Eigen::MatrixXd conePoints = Eigen::MatrixXd::Zero(numberOfCones,3);
+  m_validCones = 0;
+  for(uint32_t i1 = 0; i1 < m_coneFrame.size(); i1++){
+    if(m_coneFrame[i1].second.isValid()){
+      m_validCones++;
+    }
+  }  
+  if(m_validCones == 0){
+      m_coneFrame.clear();
+  }
   for (uint32_t i = 0; i < numberOfCones; i++)
   {
     uint32_t numberOfPointsOnCone = coneIndexList[i].size();
@@ -387,23 +403,100 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     conePositionX = conePositionX / numberOfPointsOnCone;
     conePositionY = conePositionY / numberOfPointsOnCone;
     conePositionZ = conePositionZ / numberOfPointsOnCone;
-    conePoints.row(i) << conePositionX,conePositionY,conePositionZ;
+    //conePoints.row(i) << conePositionX,conePositionY,conePositionZ;
 
-		Eigen::Vector3f conePoint = Cartesian2Spherical(conePositionX,conePositionY,conePositionZ);
-    //ConeDirection
+    Cone objectToValidate = Cone(conePositionX,conePositionY,conePositionZ);
+    std::pair<bool, Cone> objectPair = std::pair<bool, Cone>(false,objectToValidate);
 
-    std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-    cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-    opendlv::logic::perception::ObjectDirection coneDirection;
-    coneDirection.objectId(i);
-    coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
-    coneDirection.zenithAngle(conePoint(2));
-    m_od4.send(coneDirection,sampleTime,m_senderStamp);
-    opendlv::logic::perception::ObjectDistance coneDistance;
-    coneDistance.objectId(i);
-    coneDistance.distance(conePoint(0));
-    m_od4.send(coneDistance,sampleTime,m_senderStamp);
+    if(m_validCones == 0){
+        std::cout << "in empty frame" << std::endl;
+        //m_coneFrame.clear();
+        m_coneFrame.push_back(objectPair);
+    }else{ 
+      int k = 0;
+      int frameSize = m_coneFrame.size();
+      bool foundMatch = false;
+      if(objectPair.second.isThisMe(m_coneFrame[k].second.getX(),m_coneFrame[k].second.getY())){
+        posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
+        posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
+        m++;
+        std::cout << "found match" << std::endl;
+        m_coneFrame[k].second.setX(objectPair.second.getX());
+        m_coneFrame[k].second.setY(objectPair.second.getY());
+        m_coneFrame[k].second.addHit();
+        m_coneFrame[k].first = true;
+        foundMatch = true;
+      }
+      while( k < frameSize && !foundMatch){
+        if(!m_coneFrame[k].first && objectPair.second.isThisMe(m_coneFrame[k].second.getX(),m_coneFrame[k].second.getY())){
+          posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
+          posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
+          m++;
+          std::cout << "found match" << std::endl;
+          m_coneFrame[k].second.setX(objectPair.second.getX());
+          m_coneFrame[k].second.setY(objectPair.second.getY());
+          m_coneFrame[k].second.addHit();
+          m_coneFrame[k].first = true;
+          foundMatch = true;  
+        }
+        k++;
+      }
+      if(!foundMatch){
+        m_coneFrame.push_back(objectPair);
+      }
+    }   //std::cout << "Cone Sent" << std::endl;//std::cout << "a point sent out with distance: " <<conePoint.getDistance() <<"; azimuthAngle: " << conePoint.getAzimuthAngle() << "; and zenithAngle: " << conePoint.getZenithAngle() << std::endl;
+  }
+
+  for(uint32_t i = 0; i < m_coneFrame.size(); i++){
+    if(m_coneFrame[i].second.isValid()){
+      if(m_coneFrame[i].second.shouldBeRemoved()){
+        //m_coneFrame.erase(m_coneFrame.begin()+i)  DO NOT REMOVE LIKE THIS
+        m_coneFrame[i].second.setValidState(false);
+        continue; 
+      }
+      if(!m_coneFrame[i].first && m_coneFrame[i].second.shouldBeInFrame()){  
+        std::cout << "is not matched but should be in frame | curr X: " << m_coneFrame[i].second.getX() << " shift: "  << posShiftX/m<< std::endl;
+        double x = m_coneFrame[i].second.getX() - posShiftX/m;
+        double y = m_coneFrame[i].second.getY() - posShiftY/m;
+        double z = m_coneFrame[i].second.getZ();
+        Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
+        std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+        cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+        opendlv::logic::perception::ObjectDirection coneDirection;
+        coneDirection.objectId(i);
+        coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
+        coneDirection.zenithAngle(conePoint(2));
+        m_od4.send(coneDirection,sampleTime,m_senderStamp);
+        opendlv::logic::perception::ObjectDistance coneDistance;
+        coneDistance.objectId(i);
+        coneDistance.distance(conePoint(0));
+        m_od4.send(coneDistance,sampleTime,m_senderStamp);            
+      }
+      else if(m_coneFrame[i].first){
+        std::cout << "send matched cone" << std::endl;
+        double x = m_coneFrame[i].second.getX();
+        double y = m_coneFrame[i].second.getY();
+        double z = m_coneFrame[i].second.getZ();
+
+        Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
+        std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+        cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+        opendlv::logic::perception::ObjectDirection coneDirection;
+        coneDirection.objectId(i);
+        coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
+        coneDirection.zenithAngle(conePoint(2));
+        m_od4.send(coneDirection,sampleTime,m_senderStamp);
+        opendlv::logic::perception::ObjectDistance coneDistance;
+        coneDistance.objectId(i);
+        coneDistance.distance(conePoint(0));
+        m_od4.send(coneDistance,sampleTime,m_senderStamp);
+        m_coneFrame[i].first = false;        
+      }
+      if(!m_coneFrame[i].first){
+        m_coneFrame[i].second.addMiss();
+      }
     }
+  }//loop
 }
 
 Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)

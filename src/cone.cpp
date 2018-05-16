@@ -19,37 +19,21 @@
 
 #include "cone.hpp"
 
-Cone::Cone(double x, double y,int type,int id):
+
+Cone::Cone(double x, double y,double z):
   m_x()
 , m_y()
-, m_type()
-, m_id()
+, m_z()
+, m_hits()
+, m_missHit()
+, m_isValid()
 {
   m_x = x;
   m_y = y;
-  m_type = type;
-  m_id = id;
-}
-
-opendlv::logic::perception::ObjectDirection Cone::getDirection(Eigen::Vector3d pose){
-  double x = m_x-pose(0);
-  double y = m_y-pose(1);
-  double heading = pose(2);
-  double azimuthAngle = atan2(y,x)*static_cast<double>(RAD2DEG);
-  azimuthAngle = azimuthAngle-heading;
-  opendlv::logic::perception::ObjectDirection direction;
-  direction.zenithAngle(0);
-  direction.azimuthAngle(static_cast<float>(azimuthAngle));
-  return direction;
-}
-
-opendlv::logic::perception::ObjectDistance Cone::getDistance(Eigen::Vector3d pose){
-  double x = m_x-pose(0);
-  double y = m_y-pose(1);
-  double distance = sqrt(x*x+y*y);
-  opendlv::logic::perception::ObjectDistance msgDistance;
-  msgDistance.distance(static_cast<float>(distance));
-  return msgDistance;
+  m_z = z;
+  m_hits = 0;
+  m_missHit = 0;
+  m_isValid = true;
 }
 
 double Cone::getX(){
@@ -60,26 +44,73 @@ double Cone::getY(){
   return m_y;
 }
 
-int Cone::getType(){
-  return m_type;
-}
+double Cone::getZ(){
 
-int Cone::getId(){
-  return m_id;
+  return m_z;
 }
 
 void Cone::setX(double x){
+  std::cout << "new x: " << x << " old x: " << m_x << std::endl;
   m_x = x;
 }
 
 void Cone::setY(double y){
+
+  std::cout << "new y: " << y << " old y: " << m_y << std::endl;
   m_y = y;
 }
+void Cone::setZ(double z){
 
-void Cone::setType(int type){
-  m_type = type;
+  m_z = z;
+}
+void Cone::addHit(){
+
+  m_hits++;
+  m_missHit = 0;
+
+}
+int Cone::getHits(){
+
+  return m_hits;
+}
+void Cone::addMiss(){
+
+  m_missHit++;
 }
 
-void Cone::setId(int id){
-  m_id = id;
+int Cone::getMisses(){
+
+  return m_missHit;
+}
+
+bool Cone::isThisMe(double x, double y){
+
+  //double diffX = std::abs(m_x - x);
+  //double diffY = std::abs(m_y - y);
+  double distance = std::sqrt( (m_x - x)*(m_x - x) + (m_y - y)*(m_y - y) );
+  if(distance < 1){return true;}else{return false;}
+
+}
+
+bool Cone::shouldBeInFrame(){
+
+  if(m_hits >= 3 && m_y > 2 && m_missHit < 4 && m_isValid){return true;}else{return false;}
+}
+
+bool Cone::shouldBeRemoved(){
+
+  if(m_missHit >= 4 || m_y < 2 ){return true;}else{return false;}
+
+}
+
+void Cone::setValidState(bool state){
+
+  m_isValid = state;
+
+}
+
+bool Cone::isValid(){
+
+  return m_isValid;
+
 }

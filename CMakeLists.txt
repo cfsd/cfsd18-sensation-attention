@@ -36,7 +36,8 @@ set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
     -D_XOPEN_SOURCE=700 \
     -D_FORTIFY_SOURCE=2 \
-    -O2 \
+    -g \
+    -O0 \
     -fstack-protector \
     -fomit-frame-pointer \
     -pipe \
@@ -91,7 +92,7 @@ set(LIBRARIES Threads::Threads)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(${PROJECT_NAME}-core STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/attention.cpp ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.cpp)
+add_library(${PROJECT_NAME}-core STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/attention.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/cone.cpp ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.cpp)
 
 ################################################################################
 # Create executable.
