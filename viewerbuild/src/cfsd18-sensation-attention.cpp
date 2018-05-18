@@ -47,11 +47,11 @@ int32_t main(int32_t argc, char **argv) {
     cluon::data::Envelope data;
     //std::shared_ptr<Slam> slammer = std::shared_ptr<Slam>(new Slam(10));
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
-    Drawer drawer(commandlineArguments);
+    Attention attention(commandlineArguments,od4);
+    Drawer drawer(commandlineArguments,attention);
     Viewer viewer(commandlineArguments,drawer);
     std::thread viewThread (&Viewer::Run,viewer); //just sleep instead maybe since this is unclear how it works
     viewThread.detach();
-    Attention attention(commandlineArguments,od4,drawer);
 
 
     auto envelopeRecieved{[&senser = attention](cluon::data::Envelope &&envelope)

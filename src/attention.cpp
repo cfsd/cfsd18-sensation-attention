@@ -66,14 +66,14 @@ void Attention::nextContainer(cluon::data::Envelope data)
       m_CPCReceived = true;
       cluon::data::TimeStamp ts = data.sampleTimeStamp();
       m_CPCReceivedLastTime = ts;
-
-      std::lock_guard<std::mutex> lockCPC(m_cpcMutex);
-      opendlv::proxy::PointCloudReading pointCloud = cluon::extractMessage<opendlv::proxy::PointCloudReading>(std::move(data));
-
-	    //cluon::data::TimeStamp TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
       auto start = std::chrono::system_clock::now();
-      SavePointCloud(pointCloud);
-
+      {
+        std::lock_guard<std::mutex> lockCPC(m_cpcMutex);
+        opendlv::proxy::PointCloudReading pointCloud = cluon::extractMessage<opendlv::proxy::PointCloudReading>(std::move(data));
+	      //cluon::data::TimeStamp TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
+        SavePointCloud(pointCloud);
+      }
+	    //cluon::data::TimeStamp TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
       if(m_pointCloud.rows() > 20000){
         ConeDetection();
       }else{
@@ -150,7 +150,6 @@ void Attention::SavePointCloud(opendlv::proxy::PointCloudReading pointCloud){
       const uint32_t numberOfAzimuths = numberOfPoints / entriesPerAzimuth;
       const double azimuthIncrement = (endAzimuth - startAzimuth) / numberOfAzimuths;//Calculate the azimuth increment
       std::stringstream sstr(distances);
-
       m_pointCloud = Eigen::MatrixXd::Zero(numberOfPoints,3);
       m_pointIndex = 0;
       for (uint32_t azimuthIndex = 0; azimuthIndex < numberOfAzimuths; azimuthIndex++) {
@@ -172,6 +171,10 @@ void Attention::ConeDetection(){
   //m_generatedTestPointCloud = GenerateTestPointCloud();
   cluon::data::TimeStamp startTime = cluon::time::convert(std::chrono::system_clock::now());
   Eigen::MatrixXd pointCloudConeROI = ExtractConeROI(m_xBoundary, m_yBoundary, m_groundLayerZ, m_coneHeight);
+  {
+    std::lock_guard<std::mutex> lock(m_drawerMutex);
+    m_pointCloudROI = pointCloudConeROI;
+  }
   cluon::data::TimeStamp processTime = cluon::time::convert(std::chrono::system_clock::now());
   double timeElapsed = fabs(static_cast<double>(processTime.microseconds()-startTime.microseconds())/1000000.0);
   //std::cout << "Time elapsed for Extract RoI: " << timeElapsed << std::endl;
@@ -179,6 +182,11 @@ void Attention::ConeDetection(){
   //std::cout << "RANSAC" << std::endl;
   //std::cout << "number of points after ROI are:"<< pointCloudConeROI.rows() << std::endl;
   Eigen::MatrixXd pcRefit = RANSACRemoveGround(pointCloudConeROI);
+  {
+    std::lock_guard<std::mutex> lock(m_drawerMutex);
+    m_pcAfterRANSAC = pcRefit;
+  }
+  m_pcAfterRANSAC = pcRefit;
   std::cout << "RANSACSIZE: " << pcRefit.rows() << std::endl;
 
 
@@ -416,18 +424,24 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       int k = 0;
       int frameSize = m_coneFrame.size();
       bool foundMatch = false;
-      if(objectPair.second.isThisMe(m_coneFrame[k].second.getX(),m_coneFrame[k].second.getY())){
-        posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
-        posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
-        m++;
-        std::cout << "found match" << std::endl;
-        m_coneFrame[k].second.setX(objectPair.second.getX());
-        m_coneFrame[k].second.setY(objectPair.second.getY());
-        m_coneFrame[k].second.addHit();
-        m_coneFrame[k].first = true;
-        foundMatch = true;
+      if(m_coneFrame[i].second.isValid()){
+        if(objectPair.second.isThisMe(m_coneFrame[k].second.getX(),m_coneFrame[k].second.getY())){
+          posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
+          posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
+          m++;
+          std::cout << "found match" << std::endl;
+          m_coneFrame[k].second.setX(objectPair.second.getX());
+          m_coneFrame[k].second.setY(objectPair.second.getY());
+          m_coneFrame[k].second.addHit();
+          m_coneFrame[k].first = true;
+          foundMatch = true;
+        }
       }
       while( k < frameSize && !foundMatch){
+        if(m_coneFrame[i].second.isValid()){
+          k++;
+          continue;
+        }
         if(!m_coneFrame[k].first && objectPair.second.isThisMe(m_coneFrame[k].second.getX(),m_coneFrame[k].second.getY())){
           posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
           posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
@@ -446,7 +460,8 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       }
     }   //std::cout << "Cone Sent" << std::endl;//std::cout << "a point sent out with distance: " <<conePoint.getDistance() <<"; azimuthAngle: " << conePoint.getAzimuthAngle() << "; and zenithAngle: " << conePoint.getZenithAngle() << std::endl;
   }
-
+  std::lock_guard<std::mutex> lock(m_drawerMutex);
+  m_sentCones.clear();
   for(uint32_t i = 0; i < m_coneFrame.size(); i++){
     if(m_coneFrame[i].second.isValid()){
       if(m_coneFrame[i].second.shouldBeRemoved()){
@@ -470,7 +485,8 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         opendlv::logic::perception::ObjectDistance coneDistance;
         coneDistance.objectId(i);
         coneDistance.distance(conePoint(0));
-        m_od4.send(coneDistance,sampleTime,m_senderStamp);            
+        m_od4.send(coneDistance,sampleTime,m_senderStamp);    
+        m_sentCones.push_back(m_coneFrame[i].second);         
       }
       else if(m_coneFrame[i].first){
         std::cout << "send matched cone" << std::endl;
@@ -490,7 +506,8 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         coneDistance.objectId(i);
         coneDistance.distance(conePoint(0));
         m_od4.send(coneDistance,sampleTime,m_senderStamp);
-        m_coneFrame[i].first = false;        
+        m_coneFrame[i].first = false;
+        m_sentCones.push_back(m_coneFrame[i].second);         
       }
       if(!m_coneFrame[i].first){
         m_coneFrame[i].second.addMiss();
@@ -665,4 +682,25 @@ Eigen::MatrixXd Attention::RemoveDuplicates(Eigen::MatrixXd needSorting)
 
   return needSorting;
 
+}
+
+Eigen::MatrixXd Attention::getFullPointCloud(){
+  std::lock_guard<std::mutex> lock(m_cpcMutex);
+  return m_pointCloud;
+}
+
+
+Eigen::MatrixXd Attention::getROIPointCloud(){
+  std::lock_guard<std::mutex> lock(m_drawerMutex);
+  return m_pointCloudROI;
+}
+
+Eigen::MatrixXd Attention::getRANSACPointCloud(){
+  std::lock_guard<std::mutex> lock(m_drawerMutex);
+  return m_pcAfterRANSAC;
+}
+
+std::vector<Cone> Attention::getSentCones(){
+  std::lock_guard<std::mutex> lock(m_drawerMutex);
+  return m_sentCones;
 }

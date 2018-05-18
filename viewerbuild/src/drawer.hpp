@@ -6,13 +6,14 @@
 #include <pangolin/pangolin.h>
 #include <Eigen/Dense>
 #include "cone.hpp"
+#include "attention.hpp"
 
 
 
 
 class Drawer{
     public:
-        Drawer(std::map<std::string,std::string> commandlineArgs);
+        Drawer(std::map<std::string,std::string> commandlineArgs, Attention &attention);
         void drawRawPoints();
         void drawROIPoints();
         void drawRANSACPoints();
@@ -32,6 +33,7 @@ class Drawer{
         Eigen::MatrixXd m_ROIPoints = {};
         Eigen::MatrixXd m_RANSACPoints = {};
         std::vector<Cone> m_cones = {};
+        Attention& attention;
 
 };
 #endif

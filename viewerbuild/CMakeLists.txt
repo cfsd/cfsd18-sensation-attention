@@ -97,7 +97,7 @@ set(LIBRARIES Threads::Threads ${Pangolin_LIBRARIES})
 include_directories(${SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(${PROJECT_NAME}-core STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/attention.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/cone.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/viewer.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/drawer.cpp ${BUILD_DIR}/opendlv-standard-message-set.cpp)
+add_library(${PROJECT_NAME}-core STATIC ${SOURCE_DIR}/src/attention.cpp ${SOURCE_DIR}/src/cone.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/viewer.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/drawer.cpp ${BUILD_DIR}/opendlv-standard-message-set.cpp)
 
 ################################################################################
 # Create executable.

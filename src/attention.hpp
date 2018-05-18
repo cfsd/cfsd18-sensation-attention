@@ -34,6 +34,10 @@ class Attention {
   Attention &operator=(Attention const &) = delete;
   ~Attention();
   void nextContainer(cluon::data::Envelope data);
+  Eigen::MatrixXd getFullPointCloud();
+  Eigen::MatrixXd getROIPointCloud();
+  Eigen::MatrixXd getRANSACPointCloud();
+  std::vector<Cone> getSentCones();
 
  private:
   void setUp(std::map<std::string, std::string> commandlineArguments); 
@@ -91,8 +95,14 @@ class Attention {
   double m_dotThreshold;
   uint32_t m_senderStamp = 0;
   Eigen::MatrixXd m_lastBestPlane;
-
   std::vector<std::pair<bool, Cone>> m_coneFrame = {};
+
+  /*For sending to the drawer*/
+  std::mutex m_drawerMutex = {};
+  Eigen::MatrixXd m_pointCloudROI = {};
+  Eigen::MatrixXd m_pcAfterRANSAC = {};
+  std::vector<Cone> m_sentCones = {};
+
 
   int m_validCones = 0;
   int m_count = 0;

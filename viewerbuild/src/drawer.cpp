@@ -1,18 +1,21 @@
 #include "drawer.hpp"
 
 
-Drawer::Drawer(std::map<std::string,std::string> commandlineArgs){
+Drawer::Drawer(std::map<std::string,std::string> commandlineArgs, Attention &a_attention):
+attention(a_attention)
+{
     std::cout << commandlineArgs.count("cid") << std::endl;
 }
 
 
 void Drawer::drawRawPoints(){
     std::lock_guard<std::mutex> lock(m_rawMutex);
+    m_rawPoints = attention.getFullPointCloud();
     uint32_t nPoints = static_cast<unsigned int>(m_rawPoints.rows());
     if(nPoints == 0){
         return;
     }    
-    glPointSize(3);
+    glPointSize(2);
     glBegin(GL_POINTS);
     glColor3f(0.0,0.0,0.0);
     for(uint32_t i = 0; i<nPoints; i++){
@@ -26,13 +29,14 @@ void Drawer::drawRawPoints(){
 
 void Drawer::drawROIPoints(){
     std::lock_guard<std::mutex> lock(m_ROIMutex);
+    m_ROIPoints = attention.getROIPointCloud();
     uint32_t nPoints = static_cast<unsigned int>(m_ROIPoints.rows());
     if(nPoints == 0){
         return;
     }    
     glPointSize(3);
     glBegin(GL_POINTS);
-    glColor3f(0.5,0.5,0.0);
+    glColor3f(1.0,0.0,0.0);
     for(uint32_t i = 0; i<nPoints; i++){
         float x = static_cast<float>(m_ROIPoints(i,0));
         float y = static_cast<float>(m_ROIPoints(i,1));
@@ -44,14 +48,14 @@ void Drawer::drawROIPoints(){
 
 
 void Drawer::drawRANSACPoints(){
-    std::lock_guard<std::mutex> lock(m_RANSACMutex);
+    m_RANSACPoints = attention.getRANSACPointCloud();
     uint32_t nPoints = static_cast<unsigned int>(m_RANSACPoints.rows());
     if(nPoints == 0){
         return;
     }    
-    glPointSize(3);
+    glPointSize(5);
     glBegin(GL_POINTS);
-    glColor3f(0.5,0.5,0.0);
+    glColor3f(0.0,1.0,0.0);
     for(uint32_t i = 0; i<nPoints; i++){
         float x = static_cast<float>(m_RANSACPoints(i,0));
         float y = static_cast<float>(m_RANSACPoints(i,1));
@@ -63,6 +67,7 @@ void Drawer::drawRANSACPoints(){
 
 void Drawer::drawCones(){
     std::lock_guard<std::mutex> lock(m_coneMutex);
+    m_cones = attention.getSentCones();
     uint32_t nPoints = m_cones.size();
     if(nPoints == 0){
         return;
