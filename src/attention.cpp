@@ -469,6 +469,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
   }
   std::lock_guard<std::mutex> lock(m_drawerMutex);
   m_sentCones.clear();
+  int sentCounter = 0;
   for(uint32_t i = 0; i < m_coneFrame.size(); i++){
     if(m_coneFrame[i].second.isValid()){
       if(m_coneFrame[i].second.shouldBeRemoved()){
@@ -485,14 +486,15 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
         cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
         opendlv::logic::perception::ObjectDirection coneDirection;
-        coneDirection.objectId(i);
+        coneDirection.objectId(sentCounter);
         coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
         coneDirection.zenithAngle(conePoint(2));
         m_od4.send(coneDirection,sampleTime,m_senderStamp);
         opendlv::logic::perception::ObjectDistance coneDistance;
-        coneDistance.objectId(i);
+        coneDistance.objectId(sentCounter);
         coneDistance.distance(conePoint(0));
-        m_od4.send(coneDistance,sampleTime,m_senderStamp);    
+        m_od4.send(coneDistance,sampleTime,m_senderStamp);
+        sentCounter++;    
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
       else if(m_coneFrame[i].first){
@@ -505,14 +507,15 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
         cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
         opendlv::logic::perception::ObjectDirection coneDirection;
-        coneDirection.objectId(i);
+        coneDirection.objectId(sentCounter);
         coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
         coneDirection.zenithAngle(conePoint(2));
         m_od4.send(coneDirection,sampleTime,m_senderStamp);
         opendlv::logic::perception::ObjectDistance coneDistance;
-        coneDistance.objectId(i);
+        coneDistance.objectId(sentCounter);
         coneDistance.distance(conePoint(0));
         m_od4.send(coneDistance,sampleTime,m_senderStamp);
+        sentCounter++;
         m_coneFrame[i].first = false;
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
