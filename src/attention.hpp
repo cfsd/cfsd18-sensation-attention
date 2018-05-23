@@ -46,7 +46,7 @@ class Attention {
   void ConeDetection();
   std::vector<std::vector<uint32_t>> NNSegmentation(Eigen::MatrixXd &pointCloudConeROI, const double &connectDistanceThreshold);
   std::vector<std::vector<uint32_t>> FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList, const double &minNumOfPointsForCone, const double &maxNumOfPointsForCone, const double &nearConeRadiusThreshold, const double &farConeRadiusThreshold, const double &zRangeThreshold);
-  Eigen::MatrixXd ExtractConeROI(const double &xBoundary, const double &yBoundary, const double &groundLayerZ,  const double &coneHeight);
+  Eigen::MatrixXd ExtractConeROI(Eigen::MatrixXd, const double &xBoundary, const double &yBoundary, const double &groundLayerZ,  const double &coneHeight);
   double CalculateXYDistance(Eigen::MatrixXd &pointCloud, const uint32_t &index1, const uint32_t &index2);
   double CalculateConeRadius(Eigen::MatrixXd &potentialConePointCloud);
   double GetZRange(Eigen::MatrixXd &potentialConePointCloud);

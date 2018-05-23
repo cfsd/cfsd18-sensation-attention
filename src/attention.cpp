@@ -172,11 +172,8 @@ void Attention::ConeDetection(){
   cluon::data::TimeStamp startTime = cluon::time::convert(std::chrono::system_clock::now());
 
 
-  //Eigen::MatrixXd pcRefit = ExtractConeROI(m_xBoundary, m_yBoundary, m_groundLayerZ, m_coneHeight);
-  {
-    std::lock_guard<std::mutex> lock(m_drawerMutex);
-    m_pointCloudROI = m_pointCloud;
-  }
+  
+ 
   cluon::data::TimeStamp processTime = cluon::time::convert(std::chrono::system_clock::now());
   double timeElapsed = fabs(static_cast<double>(processTime.microseconds()-startTime.microseconds())/1000000.0);
   //std::cout << "Time elapsed for Extract RoI: " << timeElapsed << std::endl;
@@ -187,14 +184,19 @@ void Attention::ConeDetection(){
 
   //Eigen::MatrixXd pcRefit = RANSACRemoveGround(pointCloudConeROI);
 
-  Eigen::MatrixXd pcRefit = layerRemoveGround(m_pointCloud);
+  Eigen::MatrixXd pcNoGround = layerRemoveGround(m_pointCloud);
   {
     std::lock_guard<std::mutex> lock(m_drawerMutex);
-    m_pcAfterRANSAC = pcRefit;
+    m_pcAfterRANSAC = pcNoGround;
   }
-  std::cout << "RANSACSIZE: " << pcRefit.rows() << std::endl;
+  //std::cout << "RANSACSIZE: " << pcRefit.rows() << std::endl;
 
+  Eigen::MatrixXd pcRefit = ExtractConeROI(pcNoGround,m_xBoundary, m_yBoundary, m_groundLayerZ, m_coneHeight);
 
+   {
+    std::lock_guard<std::mutex> lock(m_drawerMutex);
+    m_pointCloudROI = pcRefit;
+  }
   startTime = processTime;
   std::vector<int32_t> notFloorIndex;
 
@@ -353,13 +355,13 @@ double Attention::GetZRange(Eigen::MatrixXd &potentialConePointCloud)
 }
 
 
-Eigen::MatrixXd Attention::ExtractConeROI(const double &xBoundary, const double &yBoundary, const double &groundLayerZ,  const double &coneHeight){
-  uint32_t numberOfPointsCPC = m_pointCloud.rows();
+Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, const double &xBoundary, const double &yBoundary, const double &groundLayerZ,  const double &coneHeight){
+  uint32_t numberOfPointsCPC = pointCloudFromGM.rows();
   uint32_t numberOfPointConeROI = 0;
   std::vector<int> pointIndexConeROI;
   for (uint32_t i = 0; i < numberOfPointsCPC; i++)
   {
-    if ((m_pointCloud(i,0) >= -xBoundary) && (m_pointCloud(i,0) <= xBoundary) && (m_pointCloud(i,1) <= yBoundary) && (m_pointCloud(i,1) >= 1) && (m_pointCloud(i,2) <= groundLayerZ + coneHeight))
+    if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 1) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
     {
       pointIndexConeROI.push_back(i);
       numberOfPointConeROI ++;
@@ -368,7 +370,7 @@ Eigen::MatrixXd Attention::ExtractConeROI(const double &xBoundary, const double 
   Eigen::MatrixXd pointCloudConeROI = Eigen::MatrixXd::Zero(numberOfPointConeROI,3);
   for (uint32_t j = 0; j < numberOfPointConeROI; j++)
   {
-    pointCloudConeROI.row(j) << m_pointCloud(pointIndexConeROI[j],0),m_pointCloud(pointIndexConeROI[j],1),m_pointCloud(pointIndexConeROI[j],2);
+    pointCloudConeROI.row(j) << pointCloudFromGM(pointIndexConeROI[j],0),pointCloudFromGM(pointIndexConeROI[j],1),pointCloudFromGM(pointIndexConeROI[j],2);
   }
 
   return pointCloudConeROI;
