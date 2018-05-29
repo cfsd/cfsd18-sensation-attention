@@ -59,18 +59,19 @@ Attention::~Attention()
 void Attention::nextContainer(cluon::data::Envelope data)
 {
   cluon::data::TimeStamp incommingDataTime = data.sampleTimeStamp();
-  double timeSinceLastReceive = fabs(static_cast<double>(incommingDataTime.microseconds()-m_CPCReceivedLastTime.microseconds())/1000000.0);
+  double timeSinceLastReceive = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(incommingDataTime, m_CPCReceivedLastTime)));//fabs(static_cast<double>(incommingDataTime.microseconds()-m_CPCReceivedLastTime.microseconds())/1000000.0);
+
   //std::cout << "Time since between 2 incomming messages: " << timeSinceLastReceive << "s" << std::endl;
   if (timeSinceLastReceive>m_algorithmTime){
     if(data.dataType() == opendlv::proxy::PointCloudReading::ID()) {
+      cluon::data::TimeStamp TimeBeforeAlgorithm;
       m_CPCReceived = true;
       cluon::data::TimeStamp ts = data.sampleTimeStamp();
       m_CPCReceivedLastTime = ts;
-      auto start = std::chrono::system_clock::now();
       {
         std::lock_guard<std::mutex> lockCPC(m_cpcMutex);
         opendlv::proxy::PointCloudReading pointCloud = cluon::extractMessage<opendlv::proxy::PointCloudReading>(std::move(data));
-	      //cluon::data::TimeStamp TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
+	     TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
         SavePointCloud(pointCloud);
       }
 	    //cluon::data::TimeStamp TimeBeforeAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
@@ -79,13 +80,13 @@ void Attention::nextContainer(cluon::data::Envelope data)
       }else{
         std::cout << "Point cloud size not sufficient, size is: " << m_pointCloud.rows() << std::endl;
       }
-      auto end = std::chrono::system_clock::now();
-      std::chrono::duration<double> diff = end-start;
-      //cluon::data::TimeStamp TimeAfterAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
+      cluon::data::TimeStamp TimeAfterAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
       //std::cout << "before: " << TimeBeforeAlgorithm.microseconds() << "after: " << TimeAfterAlgorithm.microseconds() << std::endl;
       //double timeForProcessingOneScan = static_cast<double>(TimeAfterAlgorithm.microseconds()-TimeBeforeAlgorithm.microseconds())/1000000.0;
      // m_algorithmTime = timeForProcessingOneScan;
-      std::cout << "Time for processing one scan of data is: " << diff.count() << "s" << std::endl;
+
+      m_algorithmTime = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(TimeAfterAlgorithm, TimeBeforeAlgorithm)));
+      std::cout << "Time for processing one scan of data is: " << m_algorithmTime/1000000 << "s" << std::endl;
     }
   }
 }
@@ -112,7 +113,6 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   m_senderStamp = std::stoi(commandlineArguments["id"]);
   m_lastBestPlane = Eigen::MatrixXd::Zero(1,4);
   m_lastBestPlane << 0,0,1,0;
-
   //ConeDetection();
 
 }
@@ -483,17 +483,17 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         double y = m_coneFrame[i].second.getY() - posShiftY/m;
         double z = m_coneFrame[i].second.getZ();
         Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
-        std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-        cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+        //std::chrono::system_clock::time_point tp = m_CPCReceivedLastTime;
+        //cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
         opendlv::logic::perception::ObjectDirection coneDirection;
         coneDirection.objectId(sentCounter);
         coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
         coneDirection.zenithAngle(conePoint(2));
-        m_od4.send(coneDirection,sampleTime,m_senderStamp);
+        m_od4.send(coneDirection,m_CPCReceivedLastTime,m_senderStamp);
         opendlv::logic::perception::ObjectDistance coneDistance;
         coneDistance.objectId(sentCounter);
         coneDistance.distance(conePoint(0));
-        m_od4.send(coneDistance,sampleTime,m_senderStamp);
+        m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
         sentCounter++;    
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
@@ -504,17 +504,17 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         double z = m_coneFrame[i].second.getZ();
 
         Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
-        std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-        cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+        //std::chrono::system_clock::time_point tp =  m_CPCReceivedLastTime; //std::chrono::system_clock::now();
+        //cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
         opendlv::logic::perception::ObjectDirection coneDirection;
         coneDirection.objectId(sentCounter);
         coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
         coneDirection.zenithAngle(conePoint(2));
-        m_od4.send(coneDirection,sampleTime,m_senderStamp);
+        m_od4.send(coneDirection,m_CPCReceivedLastTime,m_senderStamp);
         opendlv::logic::perception::ObjectDistance coneDistance;
         coneDistance.objectId(sentCounter);
         coneDistance.distance(conePoint(0));
-        m_od4.send(coneDistance,sampleTime,m_senderStamp);
+        m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
         sentCounter++;
         m_coneFrame[i].first = false;
         m_sentCones.push_back(m_coneFrame[i].second);         
