@@ -361,7 +361,7 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
   std::vector<int> pointIndexConeROI;
   for (uint32_t i = 0; i < numberOfPointsCPC; i++)
   {
-    if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 1) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
+    if ((pointCloudFromGM(i,0) >= -xBoundary-3) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 1) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
     {
       pointIndexConeROI.push_back(i);
       numberOfPointConeROI ++;
@@ -436,7 +436,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
           posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
           posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
           m++;
-          std::cout << "found match" << std::endl;
+          //std::cout << "found match" << std::endl;
           m_coneFrame[k].second.setX(objectPair.second.getX());
           m_coneFrame[k].second.setY(objectPair.second.getY());
           m_coneFrame[k].second.addHit();
@@ -453,7 +453,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
           posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
           posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
           m++;
-          std::cout << "found match" << std::endl;
+          //std::cout << "found match" << std::endl;
           m_coneFrame[k].second.setX(objectPair.second.getX());
           m_coneFrame[k].second.setY(objectPair.second.getY());
           m_coneFrame[k].second.addHit();
@@ -478,7 +478,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         continue; 
       }
       if(!m_coneFrame[i].first && m_coneFrame[i].second.shouldBeInFrame()){  
-        std::cout << "is not matched but should be in frame | curr X: " << m_coneFrame[i].second.getX() << " shift: "  << posShiftX/m<< std::endl;
+        //std::cout << "is not matched but should be in frame | curr X: " << m_coneFrame[i].second.getX() << " shift: "  << posShiftX/m<< std::endl;
         double x = m_coneFrame[i].second.getX() - posShiftX/m;
         double y = m_coneFrame[i].second.getY() - posShiftY/m;
         double z = m_coneFrame[i].second.getZ();
@@ -498,7 +498,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
       else if(m_coneFrame[i].first){
-        std::cout << "send matched cone" << std::endl;
+        //std::cout << "send matched cone" << std::endl;
         double x = m_coneFrame[i].second.getX();
         double y = m_coneFrame[i].second.getY();
         double z = m_coneFrame[i].second.getZ();
