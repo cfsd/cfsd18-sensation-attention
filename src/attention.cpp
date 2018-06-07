@@ -163,7 +163,7 @@ void Attention::SavePointCloud(opendlv::proxy::PointCloudReading pointCloud){
         azimuth += azimuthIncrement;
       }
     }
-    std::cout << "number of points are:"<< m_pointCloud.rows() << std::endl;
+    //std::cout << "number of points are:"<< m_pointCloud.rows() << std::endl;
   } 
 }
 
@@ -175,7 +175,7 @@ void Attention::ConeDetection(){
   
  
   cluon::data::TimeStamp processTime = cluon::time::convert(std::chrono::system_clock::now());
-  double timeElapsed = fabs(static_cast<double>(processTime.microseconds()-startTime.microseconds())/1000000.0);
+  //double timeElapsed = fabs(static_cast<double>(processTime.microseconds()-startTime.microseconds())/1000000.0);
   //std::cout << "Time elapsed for Extract RoI: " << timeElapsed << std::endl;
 
   //std::cout << "RANSAC" << std::endl;
@@ -202,8 +202,8 @@ void Attention::ConeDetection(){
 
   cluon::data::TimeStamp processTime2 = cluon::time::convert(std::chrono::system_clock::now());
   
-  timeElapsed = fabs(static_cast<double>(processTime2.microseconds()-startTime.microseconds())/1000000.0);
-  std::cout << "Time elapsed for RANSAC: " << timeElapsed << std::endl;
+  //timeElapsed = fabs(static_cast<double>(processTime2.microseconds()-startTime.microseconds())/1000000.0);
+  //std::cout << "Time elapsed for RANSAC: " << timeElapsed << std::endl;
   startTime = processTime2;
 
   double numOfPointsAfterRANSAC = pcRefit.rows();
@@ -211,15 +211,15 @@ void Attention::ConeDetection(){
   {
     std::vector<std::vector<uint32_t>> objectIndexList = NNSegmentation(pcRefit, m_connectDistanceThreshold); //out from ransac pointCloudConeROI to pointCloudFilt
     cluon::data::TimeStamp processTime3 = cluon::time::convert(std::chrono::system_clock::now());
-    timeElapsed = fabs(static_cast<double>(processTime3.microseconds()-startTime.microseconds())/1000000.0);
+    //timeElapsed = fabs(static_cast<double>(processTime3.microseconds()-startTime.microseconds())/1000000.0);
     //std::cout << "Time elapsed for NNSegmentation: " << timeElapsed << std::endl;
     startTime = processTime3;
     std::vector<std::vector<uint32_t>> coneIndexList = FindConesFromObjects(pcRefit, objectIndexList, m_minNumOfPointsForCone, m_maxNumOfPointsForCone, m_nearConeRadiusThreshold, m_farConeRadiusThreshold, m_zRangeThreshold);
     cluon::data::TimeStamp processTime4 = cluon::time::convert(std::chrono::system_clock::now());
-    timeElapsed = fabs(static_cast<double>(processTime4.microseconds()-startTime.microseconds())/1000000.0);
+    //timeElapsed = fabs(static_cast<double>(processTime4.microseconds()-startTime.microseconds())/1000000.0);
     //std::cout << "Time elapsed for Cone Detection: " << timeElapsed << std::endl;
     startTime = processTime4;
-    std::cout << "Number of Cones is: " << coneIndexList.size() << std::endl;
+    //std::cout << "Number of Cones is: " << coneIndexList.size() << std::endl;
     SendingConesPositions(pcRefit, coneIndexList);
 
 
@@ -361,7 +361,7 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
   std::vector<int> pointIndexConeROI;
   for (uint32_t i = 0; i < numberOfPointsCPC; i++)
   {
-    if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 1) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
+    if ((pointCloudFromGM(i,0) >= -xBoundary-3) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 1) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
     {
       pointIndexConeROI.push_back(i);
       numberOfPointConeROI ++;
@@ -436,7 +436,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
           posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
           posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
           m++;
-          std::cout << "found match" << std::endl;
+          //std::cout << "found match" << std::endl;
           m_coneFrame[k].second.setX(objectPair.second.getX());
           m_coneFrame[k].second.setY(objectPair.second.getY());
           m_coneFrame[k].second.addHit();
@@ -453,7 +453,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
           posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
           posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
           m++;
-          std::cout << "found match" << std::endl;
+          //std::cout << "found match" << std::endl;
           m_coneFrame[k].second.setX(objectPair.second.getX());
           m_coneFrame[k].second.setY(objectPair.second.getY());
           m_coneFrame[k].second.addHit();
@@ -478,7 +478,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         continue; 
       }
       if(!m_coneFrame[i].first && m_coneFrame[i].second.shouldBeInFrame()){  
-        std::cout << "is not matched but should be in frame | curr X: " << m_coneFrame[i].second.getX() << " shift: "  << posShiftX/m<< std::endl;
+        //std::cout << "is not matched but should be in frame | curr X: " << m_coneFrame[i].second.getX() << " shift: "  << posShiftX/m<< std::endl;
         double x = m_coneFrame[i].second.getX() - posShiftX/m;
         double y = m_coneFrame[i].second.getY() - posShiftY/m;
         double z = m_coneFrame[i].second.getZ();
@@ -498,7 +498,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
       else if(m_coneFrame[i].first){
-        std::cout << "send matched cone" << std::endl;
+        //std::cout << "send matched cone" << std::endl;
         double x = m_coneFrame[i].second.getX();
         double y = m_coneFrame[i].second.getY();
         double z = m_coneFrame[i].second.getZ();
@@ -524,6 +524,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       }
     }
   }//loop
+  std::cout << "Sent " << sentCounter+1 << " Cones" << std::endl;
 }
 
 Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)
