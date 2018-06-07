@@ -50,13 +50,13 @@ double Cone::getZ(){
 }
 
 void Cone::setX(double x){
-  std::cout << "new x: " << x << " old x: " << m_x << std::endl;
+  //std::cout << "new x: " << x << " old x: " << m_x << std::endl;
   m_x = x;
 }
 
 void Cone::setY(double y){
 
-  std::cout << "new y: " << y << " old y: " << m_y << std::endl;
+  //std::cout << "new y: " << y << " old y: " << m_y << std::endl;
   m_y = y;
 }
 void Cone::setZ(double z){
