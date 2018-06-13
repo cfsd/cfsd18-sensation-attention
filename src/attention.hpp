@@ -57,6 +57,7 @@ class Attention {
   Eigen::MatrixXd filterClusters(std::vector<std::vector<uint32_t>>);
   double getClusterMeanDist(std::vector<uint32_t>);
   Eigen::MatrixXd RemoveDuplicates(Eigen::MatrixXd);
+  void SendEnvelopes(std::vector<Cone> cones);
 
 
   // Define constants to decode CPC message
