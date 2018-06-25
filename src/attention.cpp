@@ -431,7 +431,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       int k = 0;
       int frameSize = m_coneFrame.size();
       bool foundMatch = false;
-      if(m_coneFrame[i].second.isValid()){
+      if(m_coneFrame[k].second.isValid()){
         if(objectPair.second.isThisMe(m_coneFrame[k].second.getX(),m_coneFrame[k].second.getY())){
           posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
           posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
@@ -445,7 +445,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         }
       }
       while( k < frameSize && !foundMatch){
-        if(m_coneFrame[i].second.isValid()){
+        if(!m_coneFrame[k].second.isValid()){
           k++;
           continue;
         }
