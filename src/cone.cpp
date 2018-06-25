@@ -94,12 +94,12 @@ bool Cone::isThisMe(double x, double y){
 
 bool Cone::shouldBeInFrame(){
 
-  if(m_hits >= 3 && m_y > 1 && m_missHit < 2 && m_isValid){return true;}else{return false;}
+  if(m_hits >= 3 && m_y > 0 && m_missHit < 2 && m_isValid){return true;}else{return false;}
 }
 
 bool Cone::shouldBeRemoved(){
 
-  if(m_missHit >= 2 || m_y < 1 ){return true;}else{return false;}
+  if(m_missHit >= 2 || m_y < 0 ){return true;}else{return false;}
 
 }
 

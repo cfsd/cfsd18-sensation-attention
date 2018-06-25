@@ -361,7 +361,7 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
   std::vector<int> pointIndexConeROI;
   for (uint32_t i = 0; i < numberOfPointsCPC; i++)
   {
-    if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 1) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
+    if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 0.2) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
     {
       pointIndexConeROI.push_back(i);
       numberOfPointConeROI ++;
