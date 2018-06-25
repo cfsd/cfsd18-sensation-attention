@@ -361,7 +361,7 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
   std::vector<int> pointIndexConeROI;
   for (uint32_t i = 0; i < numberOfPointsCPC; i++)
   {
-    if ((pointCloudFromGM(i,0) >= -xBoundary-3) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 1) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
+    if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 0.2) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
     {
       pointIndexConeROI.push_back(i);
       numberOfPointConeROI ++;
@@ -481,40 +481,12 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         //std::cout << "is not matched but should be in frame | curr X: " << m_coneFrame[i].second.getX() << " shift: "  << posShiftX/m<< std::endl;
         double x = m_coneFrame[i].second.getX() - posShiftX/m;
         double y = m_coneFrame[i].second.getY() - posShiftY/m;
-        double z = m_coneFrame[i].second.getZ();
-        Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
-        //std::chrono::system_clock::time_point tp = m_CPCReceivedLastTime;
-        //cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-        opendlv::logic::perception::ObjectDirection coneDirection;
-        coneDirection.objectId(sentCounter);
-        coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
-        coneDirection.zenithAngle(conePoint(2));
-        m_od4.send(coneDirection,m_CPCReceivedLastTime,m_senderStamp);
-        opendlv::logic::perception::ObjectDistance coneDistance;
-        coneDistance.objectId(sentCounter);
-        coneDistance.distance(conePoint(0));
-        m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
+        m_coneFrame[i].second.setX(x);
+        m_coneFrame[i].second.setY(y);
         sentCounter++;    
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
       else if(m_coneFrame[i].first){
-        //std::cout << "send matched cone" << std::endl;
-        double x = m_coneFrame[i].second.getX();
-        double y = m_coneFrame[i].second.getY();
-        double z = m_coneFrame[i].second.getZ();
-
-        Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
-        //std::chrono::system_clock::time_point tp =  m_CPCReceivedLastTime; //std::chrono::system_clock::now();
-        //cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-        opendlv::logic::perception::ObjectDirection coneDirection;
-        coneDirection.objectId(sentCounter);
-        coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
-        coneDirection.zenithAngle(conePoint(2));
-        m_od4.send(coneDirection,m_CPCReceivedLastTime,m_senderStamp);
-        opendlv::logic::perception::ObjectDistance coneDistance;
-        coneDistance.objectId(sentCounter);
-        coneDistance.distance(conePoint(0));
-        m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
         sentCounter++;
         m_coneFrame[i].first = false;
         m_sentCones.push_back(m_coneFrame[i].second);         
@@ -524,7 +496,29 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       }
     }
   }//loop
-  std::cout << "Sent " << sentCounter+1 << " Cones" << std::endl;
+  SendEnvelopes(m_sentCones);
+}
+
+void Attention::SendEnvelopes(std::vector<Cone> cones){
+  for(uint32_t i = 0; i<cones.size(); i++){
+    uint32_t index = cones.size()-1-i;
+    double x = cones[index].getX();
+    double y = cones[index].getY();
+    double z = cones[index].getZ();
+    Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
+    //std::chrono::system_clock::time_point tp = m_CPCReceivedLastTime;
+    //cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+    opendlv::logic::perception::ObjectDirection coneDirection;
+    coneDirection.objectId(index);
+    coneDirection.azimuthAngle(-conePoint(1));   //Set Negative to make it inline with coordinate system used
+    coneDirection.zenithAngle(conePoint(2));
+    m_od4.send(coneDirection,m_CPCReceivedLastTime,m_senderStamp);
+    opendlv::logic::perception::ObjectDistance coneDistance;
+    coneDistance.objectId(index);
+    coneDistance.distance(conePoint(0));
+    m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
+    std::cout << "Sending cone with ID " << index << std::endl;
+  }
 }
 
 Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)
