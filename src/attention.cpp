@@ -26,6 +26,7 @@
 Attention::Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
     m_od4(od4)
   , m_cpcMutex()
+  , m_stateMachineMutex()
   , m_CPCReceived(false)
   , m_pointCloud()
   , m_pointIndex(0)
@@ -61,8 +62,9 @@ void Attention::nextContainer(cluon::data::Envelope data)
   cluon::data::TimeStamp incommingDataTime = data.sampleTimeStamp();
   double timeSinceLastReceive = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(incommingDataTime, m_CPCReceivedLastTime)));//fabs(static_cast<double>(incommingDataTime.microseconds()-m_CPCReceivedLastTime.microseconds())/1000000.0);
 
+  std::lock_guard<std::mutex> lockStateMachine(m_stateMachineMutex);
   //std::cout << "Time since between 2 incomming messages: " << timeSinceLastReceive << "s" << std::endl;
-  if (timeSinceLastReceive>m_algorithmTime && m_readyState){
+  if (timeSinceLastReceive>m_algorithmTime && m_readyStateMachine){
     if(data.dataType() == opendlv::proxy::PointCloudReading::ID()) {
       cluon::data::TimeStamp TimeBeforeAlgorithm;
       m_CPCReceived = true;
@@ -119,6 +121,16 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
 
 void Attention::setReadyState(bool state){
   m_readyState = state;
+}
+
+void Attention::setStateMachineStatus(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockStateMachine(m_stateMachineMutex);
+  auto machineStatus = cluon::extractMessage<opendlv::proxy::SwitchStateReading>(std::move(data));
+  int state = machineStatus.state();
+  if(state == 2){
+    m_readyStateMachine = true;
+  }
+  
 }
 
 void Attention::SaveOneCPCPointNoIntensity(const int &pointIndex,const uint16_t &distance_integer, const double &azimuth, const double &verticalAngle)

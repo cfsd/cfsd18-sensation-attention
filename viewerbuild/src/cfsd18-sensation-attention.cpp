@@ -49,6 +49,8 @@ int32_t main(int32_t argc, char **argv) {
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
 
     uint32_t attentionStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["id"]));
+
+    uint32_t stateMachineStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["stateMachineId"]));
     Attention attention(commandlineArguments,od4);
     Drawer drawer(commandlineArguments,attention);
     Viewer viewer(commandlineArguments,drawer);
@@ -69,7 +71,16 @@ int32_t main(int32_t argc, char **argv) {
         }    
       } 
     };
+    auto stateMachineStatusEnvelope{[&senser = attention, senderStamp = stateMachineStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          
+          senser.setStateMachineStatus(envelope);
+        }
+      }
+    };
     od4.dataTrigger(opendlv::proxy::PointCloudReading::ID(),envelopeRecieved);
+    od4.dataTrigger(opendlv::proxy::SwitchStateReading::ID(),stateMachineStatusEnvelope);
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
