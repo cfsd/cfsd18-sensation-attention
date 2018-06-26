@@ -80,7 +80,7 @@ void Attention::nextContainer(cluon::data::Envelope data)
       if(m_pointCloud.rows() > 20000){
         ConeDetection();
       }else{
-        std::cout << "Point cloud size not sufficient, size is: " << m_pointCloud.rows() << std::endl;
+        //std::cout << "Point cloud size not sufficient, size is: " << m_pointCloud.rows() << std::endl;
       }
       cluon::data::TimeStamp TimeAfterAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
       //std::cout << "before: " << TimeBeforeAlgorithm.microseconds() << "after: " << TimeAfterAlgorithm.microseconds() << std::endl;
@@ -88,7 +88,7 @@ void Attention::nextContainer(cluon::data::Envelope data)
      // m_algorithmTime = timeForProcessingOneScan;
 
       m_algorithmTime = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(TimeAfterAlgorithm, TimeBeforeAlgorithm)));
-      std::cout << "Time for processing one scan of data is: " << m_algorithmTime/1000000 << "s" << std::endl;
+      //std::cout << "Time for processing one scan of data is: " << m_algorithmTime/1000000 << "s" << std::endl;
     }
   }
 }
@@ -440,7 +440,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     std::pair<bool, Cone> objectPair = std::pair<bool, Cone>(false,objectToValidate);
 
     if(m_validCones == 0){
-        std::cout << "in empty frame" << std::endl;
+        //std::cout << "in empty frame" << std::endl;
         //m_coneFrame.clear();
         m_coneFrame.push_back(objectPair);
     }else{ 
@@ -533,7 +533,7 @@ void Attention::SendEnvelopes(std::vector<Cone> cones){
     coneDistance.objectId(index);
     coneDistance.distance(conePoint(0));
     m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
-    std::cout << "Sending cone with ID " << index << std::endl;
+    //std::cout << "Sending cone with ID " << index << std::endl;
   }
 }
 
@@ -673,8 +673,8 @@ Eigen::MatrixXd Attention::RANSACRemoveGround(Eigen::MatrixXd pointCloudInRANSAC
     pcRefit.row(i) = pointCloudInRANSAC.row(static_cast<int>(sortedIndex(i)));
 
   }
-  std::cout << "Ground plane found:" << std::endl;
-  std::cout << planeBestBest << std::endl;
+  //std::cout << "Ground plane found:" << std::endl;
+  //std::cout << planeBestBest << std::endl;
 
   return pcRefit;
 
