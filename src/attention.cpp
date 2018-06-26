@@ -62,7 +62,7 @@ void Attention::nextContainer(cluon::data::Envelope data)
   double timeSinceLastReceive = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(incommingDataTime, m_CPCReceivedLastTime)));//fabs(static_cast<double>(incommingDataTime.microseconds()-m_CPCReceivedLastTime.microseconds())/1000000.0);
 
   //std::cout << "Time since between 2 incomming messages: " << timeSinceLastReceive << "s" << std::endl;
-  if (timeSinceLastReceive>m_algorithmTime){
+  if (timeSinceLastReceive>m_algorithmTime && m_readyState){
     if(data.dataType() == opendlv::proxy::PointCloudReading::ID()) {
       cluon::data::TimeStamp TimeBeforeAlgorithm;
       m_CPCReceived = true;
@@ -115,6 +115,10 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   m_lastBestPlane << 0,0,1,0;
   //ConeDetection();
 
+}
+
+void Attention::setReadyState(bool state){
+  m_readyState = state;
 }
 
 void Attention::SaveOneCPCPointNoIntensity(const int &pointIndex,const uint16_t &distance_integer, const double &azimuth, const double &verticalAngle)
