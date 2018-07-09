@@ -334,7 +334,7 @@ std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::Matrix
     bool condition1 = (coneRadius < farConeRadiusThreshold); //Far point cones
     bool condition2 = (coneRadius>= farConeRadiusThreshold && coneRadius <= nearConeRadiusThreshold);
     bool condition3 = (zRange >= zRangeThreshold);  // Near point cones have to cover a larger Z range
-    if (condition1 || (condition2 && condition3))
+    if ((condition1 && condition3)|| (condition2 && condition3))
     {
       coneIndexList.push_back(selectedObjectIndex);
       
@@ -365,7 +365,7 @@ double Attention::CalculateConeRadius(Eigen::MatrixXd &potentialConePointCloud)
 }
 
 double Attention::GetZRange(Eigen::MatrixXd &potentialConePointCloud)
-{
+{ 
   double zRange = potentialConePointCloud.colwise().maxCoeff()[2]-potentialConePointCloud.colwise().minCoeff()[2];
   return zRange;
 }
@@ -377,6 +377,7 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
   std::vector<int> pointIndexConeROI;
   for (uint32_t i = 0; i < numberOfPointsCPC; i++)
   {
+    if(PointInROI(pointCloudFromGM(i,0),pointCloudFromGM(i,1),pointCloudFromGM(i,2)))
     if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 0.2) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
     {
       pointIndexConeROI.push_back(i);
@@ -390,6 +391,30 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
   }
 
   return pointCloudConeROI;
+}
+
+bool Attention::PointInROI(double x,double y,double z){
+  if((x>= -m_xBoundary) && (x <= m_xBoundary) && (y>= 0.2) && (y <= m_yBoundary) && (z<=m_groundLayerZ+m_coneHeight)){
+    return true;
+  }
+  else if(InExtendedROI(x,y,z)){
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+
+bool Attention::InExtendedROI(double x,double y,double z){
+  if(m_direction>0){
+    x=x-m_xBoundary;
+  }
+  else{
+    x=x+m_xBoundary;
+  }
+  double r = sqrt(x*x+y*y);
+  double theta = atan2(x,y);
+  return (r<m_yBoundary) && (fabs(theta)<fabs(m_direction)) && (z<=m_groundLayerZ+m_coneHeight);
 }
 
 double Attention::CalculateXYDistance(Eigen::MatrixXd &pointCloud, const uint32_t &index1, const uint32_t &index2)
@@ -516,12 +541,14 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
 }
 
 void Attention::SendEnvelopes(std::vector<Cone> cones){
+  double totalAzimuth;
   for(uint32_t i = 0; i<cones.size(); i++){
     uint32_t index = cones.size()-1-i;
     double x = cones[index].getX();
     double y = cones[index].getY();
     double z = cones[index].getZ();
     Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
+    totalAzimuth = totalAzimuth+conePoint(1);
     //std::chrono::system_clock::time_point tp = m_CPCReceivedLastTime;
     //cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
     opendlv::logic::perception::ObjectDirection coneDirection;
@@ -535,6 +562,8 @@ void Attention::SendEnvelopes(std::vector<Cone> cones){
     m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
     //std::cout << "Sending cone with ID " << index << std::endl;
   }
+  m_direction = totalAzimuth/cones.size()*DEG2RAD;
+  std::cout << "Principal direction " << m_direction << std::endl;
 }
 
 Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)

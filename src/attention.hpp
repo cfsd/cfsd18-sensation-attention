@@ -60,6 +60,8 @@ class Attention {
   double getClusterMeanDist(std::vector<uint32_t>);
   Eigen::MatrixXd RemoveDuplicates(Eigen::MatrixXd);
   void SendEnvelopes(std::vector<Cone> cones);
+  bool PointInROI(double x,double y,double z);
+  bool InExtendedROI(double x,double y,double z);
 
 
   // Define constants to decode CPC message
@@ -116,6 +118,7 @@ class Attention {
   uint32_t m_numberOfAzimuths = {};
   bool m_readyState = false;
   bool m_readyStateMachine = false;
+  double m_direction = 0;
 
 
 };
