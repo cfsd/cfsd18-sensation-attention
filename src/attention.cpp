@@ -541,7 +541,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
 }
 
 void Attention::SendEnvelopes(std::vector<Cone> cones){
-  double totalAzimuth;
+  double totalAzimuth = 0;
   for(uint32_t i = 0; i<cones.size(); i++){
     uint32_t index = cones.size()-1-i;
     double x = cones[index].getX();
