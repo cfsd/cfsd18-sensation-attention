@@ -318,7 +318,7 @@ std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::Matrix
     bool condition1 = (coneRadius < farConeRadiusThreshold); //Far point cones
     bool condition2 = (coneRadius>= farConeRadiusThreshold && coneRadius <= nearConeRadiusThreshold);
     bool condition3 = (zRange >= zRangeThreshold);  // Near point cones have to cover a larger Z range
-    if (condition1 || (condition2 && condition3))
+    if ((condition1 && condition3)|| (condition2 && condition3))
     {
       coneIndexList.push_back(selectedObjectIndex);
       
@@ -349,7 +349,7 @@ double Attention::CalculateConeRadius(Eigen::MatrixXd &potentialConePointCloud)
 }
 
 double Attention::GetZRange(Eigen::MatrixXd &potentialConePointCloud)
-{
+{ 
   double zRange = potentialConePointCloud.colwise().maxCoeff()[2]-potentialConePointCloud.colwise().minCoeff()[2];
   return zRange;
 }
