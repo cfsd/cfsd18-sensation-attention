@@ -38,8 +38,8 @@ Attention::Attention(std::map<std::string, std::string> commandlineArguments, cl
   , m_layerRangeThreshold()
   , m_minNumOfPointsForCone()
   , m_maxNumOfPointsForCone()
-  , m_farConeRadiusThreshold()
-  , m_nearConeRadiusThreshold()
+  , m_coneRadiusThreshold()
+  , m_coneDistanceThreshold()
   , m_zRangeThreshold()
   , m_CPCReceivedLastTime()
   , m_algorithmTime()
@@ -105,8 +105,8 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   m_layerRangeThreshold = std::stod(commandlineArguments["layerRangeThreshold"]);
   m_minNumOfPointsForCone = std::stoi(commandlineArguments["minNumOfPointsForCone"]);
   m_maxNumOfPointsForCone = std::stoi(commandlineArguments["maxNumOfPointsForCone"]);
-  m_farConeRadiusThreshold = std::stod(commandlineArguments["farConeRadiusThreshold"]);
-  m_nearConeRadiusThreshold = std::stod(commandlineArguments["nearConeRadiusThreshold"]);
+  m_coneRadiusThreshold = std::stod(commandlineArguments["coneRadiusThreshold"]);
+  m_coneDistanceThreshold = std::stod(commandlineArguments["coneDistanceThreshold"]);
   m_zRangeThreshold = std::stod(commandlineArguments["zRangeThreshold"]);
   m_inlierRangeThreshold = std::stod(commandlineArguments["inlierRangeThreshold"]);
   m_inlierFoundTreshold = std::stod(commandlineArguments["inlierFoundThreshold"]);
@@ -155,7 +155,7 @@ void Attention::SavePointCloud(opendlv::proxy::PointCloudReading pointCloud){
   if (m_CPCReceived) {
     const double startAzimuth = pointCloud.startAzimuth();
     const double endAzimuth = pointCloud.endAzimuth();
-    //std::cout << "Start Azimut: " << startAzimuth << "End Azimuth: " << endAzimuth << std::endl;
+    std::cout << "Start Azimut: " << startAzimuth << "End Azimuth: " << endAzimuth << std::endl;
     const uint8_t entriesPerAzimuth = pointCloud.entriesPerAzimuth(); // numberOfLayers
 
     uint16_t distance_integer = 0;
@@ -230,7 +230,7 @@ void Attention::ConeDetection(){
     //timeElapsed = fabs(static_cast<double>(processTime3.microseconds()-startTime.microseconds())/1000000.0);
     //std::cout << "Time elapsed for NNSegmentation: " << timeElapsed << std::endl;
     startTime = processTime3;
-    std::vector<std::vector<uint32_t>> coneIndexList = FindConesFromObjects(pcRefit, objectIndexList, m_minNumOfPointsForCone, m_maxNumOfPointsForCone, m_nearConeRadiusThreshold, m_farConeRadiusThreshold, m_zRangeThreshold);
+    std::vector<std::vector<uint32_t>> coneIndexList = FindConesFromObjects(pcRefit, objectIndexList, m_minNumOfPointsForCone, m_maxNumOfPointsForCone);
     cluon::data::TimeStamp processTime4 = cluon::time::convert(std::chrono::system_clock::now());
     //timeElapsed = fabs(static_cast<double>(processTime4.microseconds()-startTime.microseconds())/1000000.0);
     //std::cout << "Time elapsed for Cone Detection: " << timeElapsed << std::endl;
@@ -297,7 +297,7 @@ std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &po
   return objectIndexList;
 }
 
-std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList, const double &minNumOfPointsForCone, const double &maxNumOfPointsForCone, const double &nearConeRadiusThreshold, const double &farConeRadiusThreshold, const double &zRangeThreshold)
+std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList, const double &minNumOfPointsForCone, const double &maxNumOfPointsForCone)
 {
   uint32_t numberOfObjects = objectIndexList.size();
   //std::cout << "pc in findcones: " << pointCloudConeROI.rows() << std::endl;
@@ -330,20 +330,27 @@ std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::Matrix
 
     double coneRadius = CalculateConeRadius(potentialConePointCloud);
     double zRange = GetZRange(potentialConePointCloud);
+    double distance = GetClusterDistance(potentialConePointCloud);
     //cout << "Cone size: " << coneRadius << endl;
-    bool condition1 = (coneRadius < farConeRadiusThreshold); //Far point cones
-    bool condition2 = (coneRadius>= farConeRadiusThreshold && coneRadius <= nearConeRadiusThreshold);
-    bool condition3 = (zRange >= zRangeThreshold);  // Near point cones have to cover a larger Z range
-    if ((condition1 && condition3)|| (condition2 && condition3))
+    bool condition1 = coneRadius < m_coneRadiusThreshold; //Far point cones
+    bool condition2 = distance > m_coneDistanceThreshold;
+    bool condition3 = zRange>m_zRangeThreshold;
+    if (condition1 && (condition2 || condition3))
     {
-      coneIndexList.push_back(selectedObjectIndex);
-      
+      coneIndexList.push_back(selectedObjectIndex);  
     }
 
   }
 
   return coneIndexList;
 
+}
+
+double Attention::GetClusterDistance(Eigen::MatrixXd &potentialConePointCloud){
+  uint32_t numberOfPointsOnSelectedObject = potentialConePointCloud.rows();
+  double xMean = potentialConePointCloud.colwise().sum()[0]/numberOfPointsOnSelectedObject;
+  double yMean = potentialConePointCloud.colwise().sum()[1]/numberOfPointsOnSelectedObject;
+  return sqrt(xMean*xMean+yMean*yMean);
 }
 
 double Attention::CalculateConeRadius(Eigen::MatrixXd &potentialConePointCloud)
@@ -394,7 +401,7 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
 }
 
 bool Attention::PointInROI(double x,double y,double z){
-  if((x>= -m_xBoundary) && (x <= m_xBoundary) && (y>= 0.2) && (y <= m_yBoundary) && (z<=m_groundLayerZ+m_coneHeight)){
+  if((x>= -m_xBoundary) && (x <= m_xBoundary) && (y>= 0.2) && (y <= m_yBoundary) && (z<=m_coneHeight)){
     return true;
   }
   else if(InExtendedROI(x,y,z)){
@@ -720,11 +727,10 @@ Eigen::MatrixXd Attention::layerRemoveGround(Eigen::MatrixXd pointCloudConeROI)
 
   std::vector<std::vector<uint32_t>> clusters;
   uint32_t clusterCounter = 0;
-  std::vector<uint32_t> saveLayerIndex;
   for(uint32_t j = startLayer; j < endLayer; j++){
     
-     
-
+    std::vector<uint32_t> saveLayerIndex;
+    double meanDistance = 0;
     for(uint32_t i = j; i < pointCloudConeROI.rows(); i = i+16){
       //std::cout << "x: " << pointCloudConeROI(i,0) << " y: " << pointCloudConeROI(i,1) << std::endl;
       double distance = std::sqrt(pointCloudConeROI(i,0)*pointCloudConeROI(i,0) + pointCloudConeROI(i,1)*pointCloudConeROI(i,1));
@@ -732,20 +738,20 @@ Eigen::MatrixXd Attention::layerRemoveGround(Eigen::MatrixXd pointCloudConeROI)
       //std::cout << "Distance: " << distance << " Azimuth: " << azimuthAngle << std::endl;
 
       if(j == 9 ){ //endlayer
-        if(distance > 0.1 && distance < 7 && std::fabs(azimuthAngle) < DEG2RAD*180 ){
+        if(distance > 1 && distance < 20 && std::fabs(azimuthAngle) < DEG2RAD*180 ){
           saveLayerIndex.push_back(i);
+          meanDistance = meanDistance+distance;
         }
       }
       if( j == 8 || j == 7 || j == 6 ){
-        if(distance > 0.1 && distance < 20 && std::fabs(azimuthAngle) < DEG2RAD*180 ){
-        saveLayerIndex.push_back(i);
+        if(distance > 1 && distance < 20 && std::fabs(azimuthAngle) < DEG2RAD*180 ){
+          saveLayerIndex.push_back(i);
+          meanDistance = meanDistance+distance;
         }
       }  
-
-
-
     }
-
+    meanDistance = meanDistance/saveLayerIndex.size();
+    std::cout << "Mean distance layer " << j << " " << meanDistance << std::endl; 
      //std::cout << "azimuts: " << m_numberOfAzimuths << std::endl;
     //Eigen::MatrixXd currLayerPoints = Eigen::MatrixXd::Zero(saveLayerIndex.size(),3);
      //std::cout << "SaveIndexSize: " << saveLayerIndex.size() << std::endl; 
@@ -754,8 +760,12 @@ Eigen::MatrixXd Attention::layerRemoveGround(Eigen::MatrixXd pointCloudConeROI)
     for(uint32_t i = 1; i < saveLayerIndex.size(); i++){
 
       double distance = CalculateXYDistance(pointCloudConeROI,saveLayerIndex[i-1] , saveLayerIndex[i]);
-       
-      if(std::abs(distance) < 0.3){
+      int index = saveLayerIndex[i-1];
+      double radialDistance = std::sqrt(pointCloudConeROI(index,0)*pointCloudConeROI(index,0) + pointCloudConeROI(index,1)*pointCloudConeROI(index,1));
+      if(radialDistance>meanDistance && j<3){
+        continue;
+      }
+      if(std::abs(distance) < 0.25 || j>7){
         localClusterVector.push_back(saveLayerIndex[i-1]);
 
         //std::cout << "Cluster: " << clusterCounter << std::endl;
@@ -770,7 +780,7 @@ Eigen::MatrixXd Attention::layerRemoveGround(Eigen::MatrixXd pointCloudConeROI)
       }
 
     }
-
+  std::cout << "ClusterCounter layer "<< j << " : " << clusterCounter << std::endl;
 
   }
 
@@ -785,8 +795,8 @@ Eigen::MatrixXd Attention::filterClusters(std::vector<std::vector<uint32_t>> clu
       double clusterMeanDistance = getClusterMeanDist(clusterVector[i]);
       double clusterSize = static_cast<double>(clusterVector[i].size());
 
-      double potentialMaxDist = clusterSize*(clusterMeanDistance*0.2*DEG2RAD);
-      if(clusterSize < 45 && potentialMaxDist <= 0.2){
+      double potentialMaxDist = clusterSize*(clusterMeanDistance*0.2*DEG2RAD); //length of arc
+      if(clusterSize < 60 || potentialMaxDist <= 0.25 || true){
 
         for(uint32_t j = 0; j < clusterSize; j++){
 

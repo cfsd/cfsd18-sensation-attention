@@ -47,9 +47,10 @@ class Attention {
   void SavePointCloud(opendlv::proxy::PointCloudReading pointCloud);
   void ConeDetection();
   std::vector<std::vector<uint32_t>> NNSegmentation(Eigen::MatrixXd &pointCloudConeROI, const double &connectDistanceThreshold);
-  std::vector<std::vector<uint32_t>> FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList, const double &minNumOfPointsForCone, const double &maxNumOfPointsForCone, const double &nearConeRadiusThreshold, const double &farConeRadiusThreshold, const double &zRangeThreshold);
+  std::vector<std::vector<uint32_t>> FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList, const double &minNumOfPointsForCone, const double &maxNumOfPointsForCone);
   Eigen::MatrixXd ExtractConeROI(Eigen::MatrixXd, const double &xBoundary, const double &yBoundary, const double &groundLayerZ,  const double &coneHeight);
   double CalculateXYDistance(Eigen::MatrixXd &pointCloud, const uint32_t &index1, const uint32_t &index2);
+  double GetClusterDistance(Eigen::MatrixXd &potentialConePointCloud);
   double CalculateConeRadius(Eigen::MatrixXd &potentialConePointCloud);
   double GetZRange(Eigen::MatrixXd &potentialConePointCloud);
   void SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &coneIndexList);
@@ -91,8 +92,8 @@ class Attention {
   double m_layerRangeThreshold;
   uint16_t m_minNumOfPointsForCone;
   uint16_t m_maxNumOfPointsForCone;
-  double m_farConeRadiusThreshold;
-  double m_nearConeRadiusThreshold;
+  double m_coneRadiusThreshold;
+  double m_coneDistanceThreshold;
   double m_zRangeThreshold;
   cluon::data::TimeStamp m_CPCReceivedLastTime;
   double m_algorithmTime;
@@ -116,8 +117,8 @@ class Attention {
   int m_validCones = 0;
   int m_count = 0;
   uint32_t m_numberOfAzimuths = {};
-  bool m_readyState = false;
-  bool m_readyStateMachine = false;
+  bool m_readyState = true;
+  bool m_readyStateMachine = true;
   double m_direction = 0;
 
 
