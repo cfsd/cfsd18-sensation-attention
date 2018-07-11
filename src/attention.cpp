@@ -172,7 +172,8 @@ void Attention::SavePointCloud(opendlv::proxy::PointCloudReading pointCloud){
           double verticalAngle = START_V_ANGLE;
           for (uint8_t sensorIndex = 0; sensorIndex < entriesPerAzimuth; sensorIndex++) {
               sstr.read((char*)(&distance_integer), 2); // Read distance value from the string in a CPC container point by point
-              SaveOneCPCPointNoIntensity(m_pointIndex,distance_integer, azimuth, verticalAngle);
+              
+              //SaveOneCPCPointNoIntensity(m_pointIndex,distance_integer, azimuth, verticalAngle);
               m_pointIndex++;
               verticalAngle += V_INCREMENT;
           }
