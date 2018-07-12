@@ -78,6 +78,7 @@ class Attention {
 
   // Class variables to save point cloud 
   Eigen::MatrixXd m_pointCloud;
+  std::vector<Eigen::MatrixXd> m_pointCloudByLayer = {};
   int m_pointIndex;
   // Define constants and thresolds forclustering algorithm
   double m_xBoundary;

@@ -151,13 +151,20 @@ void Attention::SavePointCloud(opendlv::proxy::PointCloudReading pointCloud){
       const double azimuthIncrement = (endAzimuth - startAzimuth) / m_numberOfAzimuths;//Calculate the azimuth increment
       std::stringstream sstr(distances);
       m_pointCloud = Eigen::MatrixXd::Zero(numberOfPoints,3);
+      for(uint32_t i = 0; i<entriesPerAzimuth;i++){
+        Eigen::MatrixXd layer = Eigen::MatrixXd::Zero(numberOfPoints,3);
+        m_pointCloudByLayer.push_back(layer);
+      }
       m_pointIndex = 0;
       for (uint32_t azimuthIndex = 0; azimuthIndex < m_numberOfAzimuths; azimuthIndex++) {
           double verticalAngle = START_V_ANGLE;
           for (uint8_t sensorIndex = 0; sensorIndex < entriesPerAzimuth; sensorIndex++) {
               sstr.read((char*)(&distance_integer), 2); // Read distance value from the string in a CPC container point by point
+              uint16_t distanceCPCPoint = ntohs(distance_integer);
+              double distance = static_cast<double>(distanceCPCPoint / 100.0f); //convert to meter from resolution 1 cm, only 1 cm is supported
               SaveOneCPCPointNoIntensity(m_pointIndex,distance_integer, azimuth, verticalAngle);
               m_pointIndex++;
+              m_pointCloudByLayer[sensorIndex].row(azimuthIndex) << distance, azimuth, verticalAngle;
               verticalAngle += V_INCREMENT;
           }
         azimuth += azimuthIncrement;
@@ -184,7 +191,8 @@ void Attention::ConeDetection(){
 
   //Eigen::MatrixXd pcRefit = RANSACRemoveGround(pointCloudConeROI);
 
-  Eigen::MatrixXd pcNoGround = layerRemoveGround(m_pointCloud);
+  //Eigen::MatrixXd pcNoGround = layerRemoveGround(m_pointCloud);
+  Eigen::MatrixXd pcNoGround = removeGround(m_pointCloudByLayer);
   {
     std::lock_guard<std::mutex> lock(m_drawerMutex);
     m_pcAfterRANSAC = pcNoGround;
@@ -225,6 +233,37 @@ void Attention::ConeDetection(){
 
   }
 
+}
+
+Eigen::MatrixXd Attention::removeGround(std::vector<Eigen::MatrixXd> pointCloud){
+  for(uint32_t i = 6; i<10; i++){
+    Eigen::MatrixXd layer = pointCloud[i];
+    std::map<double,std::vector<int>> clusterSet;
+    for(uint32_t j = 0;j<layer.rows();j++){
+      double distance = layer(j,0);
+      double azimuth = layer(j,1);
+      if(distance>20 || distance<1 || fabs(azimuth)>120){
+        break;
+      }
+      bool clustered = false;
+      while(clustered || it!=clusterSet.end()){
+        if(std::fabs(distance-it->first)<0.3){
+          it->second.push_back(j);
+          it->first=it->first*((it->second.size()-1)/it->second.size())+distance/it->second.size();
+          clustered = true;
+        }else{
+          it++;
+        }
+      }
+      if(it == clusterSet.end()){
+        it->first = distance;
+        std::vector<double> cluster;
+        cluster.push_back(j);
+        it->second = cluster;
+      }
+    }
+    evaluateClusters(clusterSet)
+  }
 }
 
 std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &pointCloudConeROI, const double &connectDistanceThreshold){
