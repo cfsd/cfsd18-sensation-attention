@@ -53,9 +53,10 @@ class Attention {
   void SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &coneIndexList);
   Eigen::Vector3f Cartesian2Spherical(double &x, double &y, double &z);
   Eigen::MatrixXd RANSACRemoveGround(Eigen::MatrixXd);
-  Eigen::MatrixXd layerRemoveGround(Eigen::MatrixXd);
+  Eigen::MatrixXd layerRemoveGround(std::vector<Eigen::MatrixXd>);
   Eigen::MatrixXd filterClusters(std::vector<std::vector<uint32_t>>);
   double getClusterMeanDist(std::vector<uint32_t>);
+  double getClusterMeanHeight(std::vector<uint32_t>);
   Eigen::MatrixXd RemoveDuplicates(Eigen::MatrixXd);
   void SendEnvelopes(std::vector<Cone> cones);
   bool PointInROI(double x,double y,double z);
