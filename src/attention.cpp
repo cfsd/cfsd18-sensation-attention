@@ -26,6 +26,7 @@
 Attention::Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
     m_od4(od4)
   , m_cpcMutex()
+  , m_stateMachineMutex()
   , m_CPCReceived(false)
   , m_pointCloud()
   , m_pointIndex(0)
@@ -50,8 +51,9 @@ void Attention::nextContainer(cluon::data::Envelope data)
   cluon::data::TimeStamp incommingDataTime = data.sampleTimeStamp();
   double timeSinceLastReceive = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(incommingDataTime, m_CPCReceivedLastTime)));//fabs(static_cast<double>(incommingDataTime.microseconds()-m_CPCReceivedLastTime.microseconds())/1000000.0);
 
+  std::lock_guard<std::mutex> lockStateMachine(m_stateMachineMutex);
   //std::cout << "Time since between 2 incomming messages: " << timeSinceLastReceive << "s" << std::endl;
-  if (timeSinceLastReceive>m_algorithmTime){
+  if (timeSinceLastReceive>m_algorithmTime && m_readyStateMachine){
     if(data.dataType() == opendlv::proxy::PointCloudReading::ID()) {
       cluon::data::TimeStamp TimeBeforeAlgorithm;
       m_CPCReceived = true;
@@ -67,7 +69,7 @@ void Attention::nextContainer(cluon::data::Envelope data)
       if(m_pointCloud.rows() > 20000){
         ConeDetection();
       }else{
-        std::cout << "Point cloud size not sufficient, size is: " << m_pointCloud.rows() << std::endl;
+        //std::cout << "Point cloud size not sufficient, size is: " << m_pointCloud.rows() << std::endl;
       }
       cluon::data::TimeStamp TimeAfterAlgorithm = cluon::time::convert(std::chrono::system_clock::now());
       //std::cout << "before: " << TimeBeforeAlgorithm.microseconds() << "after: " << TimeAfterAlgorithm.microseconds() << std::endl;
@@ -98,6 +100,7 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   m_zRangeThreshold = std::stod(commandlineArguments["zRangeThreshold"]);
   m_senderStamp = std::stoi(commandlineArguments["id"]);
   m_verbose = commandlineArguments.count("verbose") != 0;
+  m_readyStateMachine = std::stoi(commandlineArguments["readyStateMachine"]) == 1;
   //RANSAC parameters, not used atm
   m_inlierRangeThreshold = std::stod(commandlineArguments["inlierRangeThreshold"]);
   m_inlierFoundTreshold = std::stod(commandlineArguments["inlierFoundThreshold"]);
@@ -106,6 +109,20 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   m_lastBestPlane = Eigen::MatrixXd::Zero(1,4);
   m_lastBestPlane << 0,0,1,0;
 
+}
+
+void Attention::setReadyState(bool state){
+  m_readyState = state;
+}
+
+void Attention::setStateMachineStatus(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockStateMachine(m_stateMachineMutex);
+  auto machineStatus = cluon::extractMessage<opendlv::proxy::SwitchStateReading>(std::move(data));
+  int state = machineStatus.state();
+  if(state == 2){
+    m_readyStateMachine = true;
+  }
+  
 }
 
 void Attention::SaveOneCPCPointNoIntensity(const int &pointIndex,const uint16_t &distance_integer, const double &azimuth, const double &verticalAngle)
@@ -512,14 +529,14 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     std::pair<bool, Cone> objectPair = std::pair<bool, Cone>(false,objectToValidate);
 
     if(m_validCones == 0){
-        std::cout << "in empty frame" << std::endl;
+        //std::cout << "in empty frame" << std::endl;
         //m_coneFrame.clear();
         m_coneFrame.push_back(objectPair);
     }else{ 
       int k = 0;
       int frameSize = m_coneFrame.size();
       bool foundMatch = false;
-      if(m_coneFrame[i].second.isValid()){
+      if(m_coneFrame[k].second.isValid()){
         if(objectPair.second.isThisMe(m_coneFrame[k].second.getX(),m_coneFrame[k].second.getY())){
           posShiftX += m_coneFrame[k].second.getX() - objectPair.second.getX();
           posShiftY += m_coneFrame[k].second.getY() - objectPair.second.getY();
@@ -533,7 +550,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         }
       }
       while( k < frameSize && !foundMatch){
-        if(m_coneFrame[i].second.isValid()){
+        if(!m_coneFrame[k].second.isValid()){
           k++;
           continue;
         }
@@ -747,8 +764,8 @@ Eigen::MatrixXd Attention::RANSACRemoveGround(Eigen::MatrixXd pointCloudInRANSAC
     pcRefit.row(i) = pointCloudInRANSAC.row(static_cast<int>(sortedIndex(i)));
 
   }
-  std::cout << "Ground plane found:" << std::endl;
-  std::cout << planeBestBest << std::endl;
+  //std::cout << "Ground plane found:" << std::endl;
+  //std::cout << planeBestBest << std::endl;
 
   return pcRefit;
 

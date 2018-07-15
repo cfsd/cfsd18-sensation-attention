@@ -47,24 +47,52 @@ int32_t main(int32_t argc, char **argv) {
     cluon::data::Envelope data;
     //std::shared_ptr<Slam> slammer = std::shared_ptr<Slam>(new Slam(10));
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
+
+    uint32_t attentionStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["id"]));
+
+    uint32_t stateMachineStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["stateMachineId"]));
     Attention attention(commandlineArguments,od4);
     Drawer drawer(commandlineArguments,attention);
     Viewer viewer(commandlineArguments,drawer);
     std::thread viewThread (&Viewer::Run,viewer); //just sleep instead maybe since this is unclear how it works
     viewThread.detach();
 
-
-    auto envelopeRecieved{[&senser = attention](cluon::data::Envelope &&envelope)
+    int pointCloudMessages = 0;
+    bool readyState = false;
+    auto envelopeRecieved{[&senser = attention, &ready = readyState, &counter = pointCloudMessages](cluon::data::Envelope &&envelope)
       {
         senser.nextContainer(envelope);
+        if(!ready){
+          if(counter > 20){
+            ready = true;
+            senser.setReadyState(ready);  
+            std::cout << "Attention Ready .." << std::endl;        
+          }else{counter++;}
+        }    
       } 
     };
+    auto stateMachineStatusEnvelope{[&senser = attention, senderStamp = stateMachineStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          
+          senser.setStateMachineStatus(envelope);
+        }
+      }
+    };
     od4.dataTrigger(opendlv::proxy::PointCloudReading::ID(),envelopeRecieved);
+    od4.dataTrigger(opendlv::proxy::SwitchStateReading::ID(),stateMachineStatusEnvelope);
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
     while (od4.isRunning()) {
-      std::this_thread::sleep_for(1s);
+
+      if(readyState){
+        opendlv::system::SignalStatusMessage ssm;
+        ssm.code(1);
+        cluon::data::TimeStamp sampleTime = cluon::time::now();
+        od4.send(ssm, sampleTime ,attentionStamp);
+      }else{std::cout << "Attention not ready yet .." << std::endl;}
+      std::this_thread::sleep_for(0.1s);
       std::chrono::system_clock::time_point tp;
     }
   }

@@ -38,6 +38,8 @@ class Attention {
   Eigen::MatrixXd getROIPointCloud();
   Eigen::MatrixXd getRANSACPointCloud();
   std::vector<Cone> getSentCones();
+  void setReadyState(bool state);
+  void setStateMachineStatus(cluon::data::Envelope data);
 
  private:
   void setUp(std::map<std::string, std::string> commandlineArguments); 
@@ -75,6 +77,7 @@ class Attention {
   const double RAD2DEG = 57.295779513082325; // 1.0 / DEG2RAD;
   cluon::OD4Session &m_od4;
   std::mutex m_cpcMutex;
+  std::mutex m_stateMachineMutex;
   bool m_CPCReceived;//Set to true when the first compact point cloud is received
 
   // Class variables to save point cloud 
@@ -115,6 +118,8 @@ class Attention {
   int m_validCones = 0;
   int m_count = 0;
   uint32_t m_numberOfAzimuths = {};
+  bool m_readyState = false;
+  bool m_readyStateMachine = false;
   double m_direction = 0;
 
 
