@@ -29,17 +29,6 @@ Attention::Attention(std::map<std::string, std::string> commandlineArguments, cl
   , m_CPCReceived(false)
   , m_pointCloud()
   , m_pointIndex(0)
-  , m_xBoundary()
-  , m_yBoundary()
-  , m_groundLayerZ()
-  , m_coneHeight()
-  , m_connectDistanceThreshold()
-  , m_layerRangeThreshold()
-  , m_minNumOfPointsForCone()
-  , m_maxNumOfPointsForCone()
-  , m_farConeRadiusThreshold()
-  , m_nearConeRadiusThreshold()
-  , m_zRangeThreshold()
   , m_CPCReceivedLastTime()
   , m_algorithmTime()
   , m_generatedTestPointCloud()
@@ -86,7 +75,9 @@ void Attention::nextContainer(cluon::data::Envelope data)
      // m_algorithmTime = timeForProcessingOneScan;
 
       m_algorithmTime = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(TimeAfterAlgorithm, TimeBeforeAlgorithm)));
-      std::cout << "Time for processing one scan of data is: " << m_algorithmTime/1000000 << "s" << std::endl;
+      if(m_verbose){
+        std::cout << "Time for processing one scan of data is: " << m_algorithmTime/1000000 << "s" << std::endl;
+      }
     }
   }
 }
@@ -96,24 +87,24 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   //m_startAngle = kv.getValue<double>("logic-cfsd18-sensation-attention.startAngle");
   //m_endAngle = kv.getValue<double>("logic-cfsd18-sensation-attention.endAngle");
   m_xBoundary = std::stod(commandlineArguments["xBoundary"]);
-  m_yBoundary = std::stod(commandlineArguments["yBoundary"]);;
-  m_groundLayerZ = std::stod(commandlineArguments["groundLayerZ"]);
-  m_coneHeight = std::stod(commandlineArguments["coneHeight"]);
+  m_yBoundary = std::stod(commandlineArguments["yBoundary"]);
+  m_zBoundary = std::stod(commandlineArguments["zUpperBoundary"]);
+  m_groundClusterDistance = std::stod(commandlineArguments["groundClusterDistanceThreshold"]);
+  m_groundClusterSize = std::stod(commandlineArguments["groundClusterSizeThreshold"]);
   m_connectDistanceThreshold = std::stod(commandlineArguments["connectDistanceThreshold"]);
-  m_layerRangeThreshold = std::stod(commandlineArguments["layerRangeThreshold"]);
   m_minNumOfPointsForCone = std::stoi(commandlineArguments["minNumOfPointsForCone"]);
   m_maxNumOfPointsForCone = std::stoi(commandlineArguments["maxNumOfPointsForCone"]);
-  m_farConeRadiusThreshold = std::stod(commandlineArguments["farConeRadiusThreshold"]);
-  m_nearConeRadiusThreshold = std::stod(commandlineArguments["nearConeRadiusThreshold"]);
+  m_coneRadiusThreshold = std::stod(commandlineArguments["coneRadiusThreshold"]);
   m_zRangeThreshold = std::stod(commandlineArguments["zRangeThreshold"]);
+  m_senderStamp = std::stoi(commandlineArguments["id"]);
+  m_verbose = commandlineArguments.count("verbose") != 0;
+  //RANSAC parameters, not used atm
   m_inlierRangeThreshold = std::stod(commandlineArguments["inlierRangeThreshold"]);
   m_inlierFoundTreshold = std::stod(commandlineArguments["inlierFoundThreshold"]);
   m_ransacIterations = std::stod(commandlineArguments["numberOfIterations"]);
   m_dotThreshold = std::stod(commandlineArguments["dotThreshold"]);
-  m_senderStamp = std::stoi(commandlineArguments["id"]);
   m_lastBestPlane = Eigen::MatrixXd::Zero(1,4);
   m_lastBestPlane << 0,0,1,0;
-  //ConeDetection();
 
 }
 
@@ -153,7 +144,7 @@ void Attention::SavePointCloud(opendlv::proxy::PointCloudReading pointCloud){
       m_pointCloud = Eigen::MatrixXd::Zero(numberOfPoints,3);
       m_pointCloudByLayer.clear();
       for(uint32_t i = 0; i<entriesPerAzimuth;i++){
-        Eigen::MatrixXd layer = Eigen::MatrixXd::Zero(numberOfPoints/16,3);
+        Eigen::MatrixXd layer = Eigen::MatrixXd::Zero(numberOfPoints/entriesPerAzimuth,3);
         m_pointCloudByLayer.push_back(layer);
       }
       m_pointIndex = 0;
@@ -176,66 +167,141 @@ void Attention::SavePointCloud(opendlv::proxy::PointCloudReading pointCloud){
 }
 
 void Attention::ConeDetection(){
-  //m_generatedTestPointCloud = GenerateTestPointCloud();
   cluon::data::TimeStamp startTime = cluon::time::convert(std::chrono::system_clock::now());
-
-
-  
- 
   cluon::data::TimeStamp processTime = cluon::time::convert(std::chrono::system_clock::now());
-  //double timeElapsed = fabs(static_cast<double>(processTime.microseconds()-startTime.microseconds())/1000000.0);
-  //std::cout << "Time elapsed for Extract RoI: " << timeElapsed << std::endl;
-
-  //std::cout << "RANSAC" << std::endl;
-  //std::cout << "number of points after ROI are:"<< pointCloudConeROI.rows() << std::endl;
-  
-
   //Eigen::MatrixXd pcRefit = RANSACRemoveGround(pointCloudConeROI);
-
   Eigen::MatrixXd pcNoGround = layerRemoveGround(m_pointCloudByLayer);
   {
     std::lock_guard<std::mutex> lock(m_drawerMutex);
     m_pcAfterRANSAC = pcNoGround;
   }
   //std::cout << "RANSACSIZE: " << pcRefit.rows() << std::endl;
-
-  Eigen::MatrixXd pcRefit = ExtractConeROI(pcNoGround,m_xBoundary, m_yBoundary, m_groundLayerZ, m_coneHeight);
-
-   {
+  Eigen::MatrixXd pcRefit = ExtractConeROI(pcNoGround);
+  {
     std::lock_guard<std::mutex> lock(m_drawerMutex);
     m_pointCloudROI = pcRefit;
   }
   startTime = processTime;
-  std::vector<int32_t> notFloorIndex;
-
   cluon::data::TimeStamp processTime2 = cluon::time::convert(std::chrono::system_clock::now());
-  
   //timeElapsed = fabs(static_cast<double>(processTime2.microseconds()-startTime.microseconds())/1000000.0);
   //std::cout << "Time elapsed for RANSAC: " << timeElapsed << std::endl;
   startTime = processTime2;
-
   double numOfPointsAfterRANSAC = pcRefit.rows();
   if (numOfPointsAfterRANSAC <= 1000.0 && numOfPointsAfterRANSAC > 0)
   {
-    std::vector<std::vector<uint32_t>> objectIndexList = NNSegmentation(pcRefit, m_connectDistanceThreshold); //out from ransac pointCloudConeROI to pointCloudFilt
+    std::vector<std::vector<uint32_t>> objectIndexList = NNSegmentation(pcRefit); //out from ransac pointCloudConeROI to pointCloudFilt
     cluon::data::TimeStamp processTime3 = cluon::time::convert(std::chrono::system_clock::now());
     //timeElapsed = fabs(static_cast<double>(processTime3.microseconds()-startTime.microseconds())/1000000.0);
     //std::cout << "Time elapsed for NNSegmentation: " << timeElapsed << std::endl;
     startTime = processTime3;
-    std::vector<std::vector<uint32_t>> coneIndexList = FindConesFromObjects(pcRefit, objectIndexList, m_minNumOfPointsForCone, m_maxNumOfPointsForCone, m_nearConeRadiusThreshold, m_farConeRadiusThreshold, m_zRangeThreshold);
+    std::vector<std::vector<uint32_t>> coneIndexList = FindConesFromObjects(pcRefit, objectIndexList);
     cluon::data::TimeStamp processTime4 = cluon::time::convert(std::chrono::system_clock::now());
     //timeElapsed = fabs(static_cast<double>(processTime4.microseconds()-startTime.microseconds())/1000000.0);
     //std::cout << "Time elapsed for Cone Detection: " << timeElapsed << std::endl;
     startTime = processTime4;
     //std::cout << "Number of Cones is: " << coneIndexList.size() << std::endl;
     SendingConesPositions(pcRefit, coneIndexList);
-
-
   }
-
 }
 
-std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &pointCloudConeROI, const double &connectDistanceThreshold){
+
+Eigen::MatrixXd Attention::layerRemoveGround(std::vector<Eigen::MatrixXd> pointCloudConeROI)
+{
+  /*Goes through the pointcloud layer by layer and clusters it and removes the clusters belonging to the ground*/
+  uint32_t startLayer = 6;
+  uint32_t endLayer = 10; 
+
+  std::vector<uint32_t> notFloorIndex;
+  for(uint32_t j = startLayer; j < endLayer; j++){
+    std::vector<uint32_t> saveLayerIndex;
+    std::vector<std::vector<uint32_t>> clusters;
+    uint32_t clusterCounter = 0;
+    for(uint32_t i = 0; i < pointCloudConeROI[j].rows(); i++){
+      double distance = pointCloudConeROI[j](i,0);
+      uint32_t index = j+i*16;
+      if(distance > 1 && distance < m_yBoundary*2){
+        saveLayerIndex.push_back(index);
+      }
+    }
+
+    std::vector<uint32_t> localClusterVector;
+    int firstClusteridx = clusters.size();
+    clusters.push_back(localClusterVector);
+    for(uint32_t i = 1; i < saveLayerIndex.size(); i++){
+      double distance = CalculateXYDistance(m_pointCloud,saveLayerIndex[i-1] , saveLayerIndex[i]);
+      if(i == saveLayerIndex.size()-1 && std::abs(distance)<1.0){ //Link the start of the scan with the end 
+        localClusterVector.push_back(saveLayerIndex[i-1]);
+        localClusterVector.push_back(saveLayerIndex[i]);
+        clusters[firstClusteridx].insert(clusters[firstClusteridx].end(), localClusterVector.begin(), localClusterVector.end());
+        break;
+      }
+      if(std::abs(distance) < m_groundClusterDistance){
+        localClusterVector.push_back(saveLayerIndex[i-1]);
+      }
+      else{
+        localClusterVector.push_back(saveLayerIndex[i-1]);
+        clusters[clusterCounter] = localClusterVector;
+        localClusterVector.clear();
+        clusterCounter++;
+        clusters.push_back(localClusterVector);
+        //std::cout << "ClusterCounter: " << clusterCounter << std::endl;
+      }
+    }
+    std::vector<uint32_t> notGroundInLayer = filterClusters(clusters);
+    notFloorIndex.insert(notFloorIndex.end(), notGroundInLayer.begin(), notGroundInLayer.end());
+  }
+  Eigen::MatrixXd filteredClusterEigen = Eigen::MatrixXd::Zero(notFloorIndex.size(),3);
+  for(uint32_t i = 0; i < notFloorIndex.size(); i++){
+    filteredClusterEigen.row(i) = m_pointCloud.row(notFloorIndex[i]);
+  }
+  return filteredClusterEigen;
+}
+
+std::vector<uint32_t> Attention::filterClusters(std::vector<std::vector<uint32_t>> clusterVector){
+  std::vector<uint32_t> notFloorIndex;
+  //double groundHeight = -0.5;
+  double groundDistance = 20;
+  for(uint32_t i = 0; i < clusterVector.size(); i++){
+    if(clusterVector[i].size() > 0){
+      double clusterMeanDistance = getClusterMeanDist(clusterVector[i]);
+      //double clusterMeanHeight = getClusterMeanHeight(clusterVector[i]);
+      double clusterSize = static_cast<double>(clusterVector[i].size());
+      double potentialMaxDist = clusterSize*(clusterMeanDistance*0.2*DEG2RAD);
+      if(clusterSize < m_groundClusterSize && potentialMaxDist <= 2*m_coneRadiusThreshold){
+        if(clusterMeanDistance<groundDistance-m_groundClusterDistance){
+          for(uint32_t j = 0; j < clusterSize; j++){
+            notFloorIndex.push_back(clusterVector[i][j]);
+          }
+        }
+      }
+      else{
+        //groundHeight = clusterMeanHeight;
+        groundDistance = clusterMeanDistance;
+      }
+    }
+  }
+  return notFloorIndex;
+}
+
+double Attention::getClusterMeanDist(std::vector<uint32_t> thisCluster){
+  double d = 0;
+  uint32_t size = thisCluster.size();
+  for(uint32_t i = 0; i < size; i++){
+    d = d + std::sqrt( m_pointCloud(thisCluster[i],0)*m_pointCloud(thisCluster[i],0) + m_pointCloud(thisCluster[i],1)*m_pointCloud(thisCluster[i],1) );
+  }
+  return d/size;
+}
+
+double Attention::getClusterMeanHeight(std::vector<uint32_t> thisCluster){
+  double height = 0;
+  uint32_t size = thisCluster.size();
+  for(uint32_t i = 0; i < size; i++){
+    height = height + m_pointCloud(thisCluster[i],2);
+  }
+  return height/size;  
+}
+
+std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &pointCloudConeROI){
   uint32_t numberOfPointConeROI = pointCloudConeROI.rows();
   //std::cout << "pc in NN: " << pointCloudConeROI.rows() << std::endl;
   std::vector<uint32_t> restPointsList(numberOfPointConeROI);
@@ -269,7 +335,7 @@ std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &po
     tmpPointIndex = tmpPointIndexNext;
     //std::cout << "Minimum Distance is " << minDistance << std::endl;
     // now we have minDistance and tmpPointIndex for next iteration
-    if (minDistance <= connectDistanceThreshold)
+    if (minDistance <= m_connectDistanceThreshold)
     {
       tmpObjectIndexList.push_back(tmpPointIndex);
     } else {
@@ -289,25 +355,21 @@ std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &po
   return objectIndexList;
 }
 
-std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList, const double &minNumOfPointsForCone, const double &maxNumOfPointsForCone, const double &nearConeRadiusThreshold, const double &farConeRadiusThreshold, const double &zRangeThreshold)
+std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList)
 {
   uint32_t numberOfObjects = objectIndexList.size();
-  //std::cout << "pc in findcones: " << pointCloudConeROI.rows() << std::endl;
   // Select those objects with reasonable number of points and save the object list in a new vector
   std::vector<std::vector<uint32_t>> objectIndexListWithNumOfPointsLimit;
   for (uint32_t i = 0; i < numberOfObjects; i ++)
   {
     std::vector<uint32_t> objectIndex = objectIndexList[i];
     uint32_t numberOfPointsOnObject = objectIndex.size();
-    
-  //std::cout << "object: "<< i << " : points: "<< numberOfPointsOnObject << numberOfObjects << std::endl;
-    bool numberOfPointsLimitation = ((numberOfPointsOnObject >= minNumOfPointsForCone) && (numberOfPointsOnObject <= maxNumOfPointsForCone));
+    bool numberOfPointsLimitation = ((numberOfPointsOnObject >= m_minNumOfPointsForCone) && (numberOfPointsOnObject <= m_maxNumOfPointsForCone));
     if (numberOfPointsLimitation)
     {
       objectIndexListWithNumOfPointsLimit.push_back(objectIndex);
     }
   }
-
   // Select among previous potention cones with reasonable radius
   std::vector<std::vector<uint32_t>> coneIndexList;
   for (uint32_t i = 0; i < objectIndexListWithNumOfPointsLimit.size(); i ++)
@@ -322,20 +384,15 @@ std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::Matrix
 
     double coneRadius = CalculateConeRadius(potentialConePointCloud);
     double zRange = GetZRange(potentialConePointCloud);
-    //cout << "Cone size: " << coneRadius << endl;
-    bool condition1 = (coneRadius < farConeRadiusThreshold); //Far point cones
-    bool condition2 = (coneRadius>= farConeRadiusThreshold && coneRadius <= nearConeRadiusThreshold);
-    bool condition3 = (zRange >= zRangeThreshold);  // Near point cones have to cover a larger Z range
-    if ((condition1 && condition3)|| (condition2 && condition3))
+  
+    bool condition1 = (coneRadius < m_coneRadiusThreshold); //Far point cones
+    bool condition3 = (zRange>= m_zRangeThreshold);  
+    if (condition1 || condition3)
     {
-      coneIndexList.push_back(selectedObjectIndex);
-      
+      coneIndexList.push_back(selectedObjectIndex);    
     }
-
   }
-
   return coneIndexList;
-
 }
 
 double Attention::CalculateConeRadius(Eigen::MatrixXd &potentialConePointCloud)
@@ -363,17 +420,16 @@ double Attention::GetZRange(Eigen::MatrixXd &potentialConePointCloud)
 }
 
 
-Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, const double &xBoundary, const double &yBoundary, const double &groundLayerZ,  const double &coneHeight){
+Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM){
   uint32_t numberOfPointsCPC = pointCloudFromGM.rows();
   uint32_t numberOfPointConeROI = 0;
   std::vector<int> pointIndexConeROI;
   for (uint32_t i = 0; i < numberOfPointsCPC; i++)
   {
     if(PointInROI(pointCloudFromGM(i,0),pointCloudFromGM(i,1),pointCloudFromGM(i,2)))
-    if ((pointCloudFromGM(i,0) >= -xBoundary) && (pointCloudFromGM(i,0) <= xBoundary) && (pointCloudFromGM(i,1) <= yBoundary) && (pointCloudFromGM(i,1) >= 0.2) && (pointCloudFromGM(i,2) <= groundLayerZ + coneHeight))
     {
       pointIndexConeROI.push_back(i);
-      numberOfPointConeROI ++;
+      numberOfPointConeROI++;
     }
   }
   Eigen::MatrixXd pointCloudConeROI = Eigen::MatrixXd::Zero(numberOfPointConeROI,3);
@@ -381,12 +437,11 @@ Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM, cons
   {
     pointCloudConeROI.row(j) << pointCloudFromGM(pointIndexConeROI[j],0),pointCloudFromGM(pointIndexConeROI[j],1),pointCloudFromGM(pointIndexConeROI[j],2);
   }
-
   return pointCloudConeROI;
 }
 
 bool Attention::PointInROI(double x,double y,double z){
-  if((x>= -m_xBoundary) && (x <= m_xBoundary) && (y>= 0.2) && (y <= m_yBoundary) && (z<=m_groundLayerZ+m_coneHeight)){
+  if((x>= -m_xBoundary) && (x <= m_xBoundary) && (y>= 0.2) && (y <= m_yBoundary) && (z<=m_zBoundary)){
     return true;
   }
   else if(InExtendedROI(x,y,z)){
@@ -406,7 +461,7 @@ bool Attention::InExtendedROI(double x,double y,double z){
   }
   double r = sqrt(x*x+y*y);
   double theta = atan2(x,y);
-  return (r<m_yBoundary) && (fabs(theta)<fabs(m_direction)) && (z<=m_groundLayerZ+m_coneHeight);
+  return (r<m_yBoundary) && (fabs(theta)<fabs(m_direction)) && (z<=m_zBoundary);
 }
 
 double Attention::CalculateXYDistance(Eigen::MatrixXd &pointCloud, const uint32_t &index1, const uint32_t &index2)
@@ -555,7 +610,6 @@ void Attention::SendEnvelopes(std::vector<Cone> cones){
     //std::cout << "Sending cone with ID " << index << std::endl;
   }
   m_direction = totalAzimuth/cones.size()*DEG2RAD;
-  std::cout << "Principal direction " << m_direction << std::endl;
 }
 
 Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)
@@ -566,7 +620,6 @@ Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)
   Eigen::Vector3f pointInSpherical;
   pointInSpherical << distance,azimuthAngle,zenithAngle;
   return pointInSpherical;
-
 }
 
 Eigen::MatrixXd Attention::RANSACRemoveGround(Eigen::MatrixXd pointCloudInRANSAC)
@@ -700,113 +753,6 @@ Eigen::MatrixXd Attention::RANSACRemoveGround(Eigen::MatrixXd pointCloudInRANSAC
   return pcRefit;
 
 }
-Eigen::MatrixXd Attention::layerRemoveGround(std::vector<Eigen::MatrixXd> pointCloudConeROI)
-{
-  uint32_t startLayer = 6;
-  uint32_t endLayer = 10; 
-
-  std::vector<uint32_t> notFloorIndex;
-  for(uint32_t j = startLayer; j < endLayer; j++){
-    std::vector<uint32_t> saveLayerIndex;
-    std::vector<std::vector<uint32_t>> clusters;
-    uint32_t clusterCounter = 0;
-    for(uint32_t i = 0; i < pointCloudConeROI[j].rows(); i++){
-      //std::cout << "x: " << pointCloudConeROI(i,0) << " y: " << pointCloudConeROI(i,1) << std::endl;
-      double distance = pointCloudConeROI[j](i,0);
-      //double azimuthAngle = pointCloudConeROI[j](i,1);
-      //std::cout << "Distance: " << distance << " Azimuth: " << azimuthAngle << std::endl;
-      uint32_t index = j+i*16;
-      if(distance > 1 && distance < 40){
-        saveLayerIndex.push_back(index);
-      }
-    }
-
-    //std::cout << "azimuts: " << m_numberOfAzimuths << std::endl;
-    //Eigen::MatrixXd currLayerPoints = Eigen::MatrixXd::Zero(saveLayerIndex.size(),3);
-    //std::cout << "SaveIndexSize: " << saveLayerIndex.size() << std::endl; 
-    std::vector<uint32_t> localClusterVector;
-    int firstClusteridx = clusters.size();
-    clusters.push_back(localClusterVector);
-    for(uint32_t i = 1; i < saveLayerIndex.size(); i++){
-      double distance = CalculateXYDistance(m_pointCloud,saveLayerIndex[i-1] , saveLayerIndex[i]);
-      if(i == saveLayerIndex.size()-1 && std::abs(distance)<1.0){ //Link the start of the scan with the end 
-        localClusterVector.push_back(saveLayerIndex[i-1]);
-        localClusterVector.push_back(saveLayerIndex[i]);
-        clusters[firstClusteridx].insert(clusters[firstClusteridx].end(), localClusterVector.begin(), localClusterVector.end());
-        break;
-      }
-      if(std::abs(distance) < 0.3){
-        localClusterVector.push_back(saveLayerIndex[i-1]);
-      }
-      else{
-        localClusterVector.push_back(saveLayerIndex[i-1]);
-        clusters[clusterCounter] = localClusterVector;
-        localClusterVector.clear();
-        clusterCounter++;
-        clusters.push_back(localClusterVector);
-        //std::cout << "ClusterCounter: " << clusterCounter << std::endl;
-      }
-    }
-    std::vector<uint32_t> notGroundInLayer = filterClusters(clusters);
-    notFloorIndex.insert(notFloorIndex.end(), notGroundInLayer.begin(), notGroundInLayer.end());
-  }
-
-  Eigen::MatrixXd filteredClusterEigen = Eigen::MatrixXd::Zero(notFloorIndex.size(),3);
-  for(uint32_t i = 0; i < notFloorIndex.size(); i++){
-    filteredClusterEigen.row(i) = m_pointCloud.row(notFloorIndex[i]);
-  }
-  return filteredClusterEigen;
-}
-
-std::vector<uint32_t> Attention::filterClusters(std::vector<std::vector<uint32_t>> clusterVector){
-  std::vector<uint32_t> notFloorIndex;
-  //double groundHeight = -0.5;
-  double groundDistance = 20;
-  for(uint32_t i = 0; i < clusterVector.size(); i++){
-    if(clusterVector[i].size() > 0){
-      double clusterMeanDistance = getClusterMeanDist(clusterVector[i]);
-      double clusterMeanHeight = getClusterMeanHeight(clusterVector[i]);
-      double clusterSize = static_cast<double>(clusterVector[i].size());
-      double potentialMaxDist = clusterSize*(clusterMeanDistance*0.2*DEG2RAD);
-      if(clusterSize < 60 && potentialMaxDist <= 0.3){
-        if(clusterMeanDistance<groundDistance-0.3){
-          for(uint32_t j = 0; j < clusterSize; j++){
-            notFloorIndex.push_back(clusterVector[i][j]);
-          }
-        }
-      }
-      else if(clusterMeanHeight<0.0){
-        //groundHeight = clusterMeanHeight;
-        groundDistance = clusterMeanDistance;
-      }
-    }
-  }
-  return notFloorIndex;
-}
-
-double Attention::getClusterMeanDist(std::vector<uint32_t> thisCluster){
-  double d = 0;
-  uint32_t size = thisCluster.size();
-  for(uint32_t i = 0; i < size; i++){
-
-    d = d + std::sqrt( m_pointCloud(thisCluster[i],0)*m_pointCloud(thisCluster[i],0) + m_pointCloud(thisCluster[i],1)*m_pointCloud(thisCluster[i],1) );
-
-
-  }
-
-  return d/size;
-}
-
-double Attention::getClusterMeanHeight(std::vector<uint32_t> thisCluster){
-  double height = 0;
-  uint32_t size = thisCluster.size();
-  for(uint32_t i = 0; i < size; i++){
-    height = height + m_pointCloud(thisCluster[i],2);
-  }
-
-  return height/size;
-  
-}
 
 Eigen::MatrixXd Attention::RemoveDuplicates(Eigen::MatrixXd needSorting)
 {
@@ -837,7 +783,6 @@ Eigen::MatrixXd Attention::getFullPointCloud(){
   std::lock_guard<std::mutex> lock(m_cpcMutex);
   return m_pointCloud;
 }
-
 
 Eigen::MatrixXd Attention::getROIPointCloud(){
   std::lock_guard<std::mutex> lock(m_drawerMutex);
