@@ -34,6 +34,8 @@ class Attention {
   Attention &operator=(Attention const &) = delete;
   ~Attention();
   void nextContainer(cluon::data::Envelope data);
+  void nextYawRate(cluon::data::Envelope data);
+  void nextGroundSpeed(cluon::data::Envelope data);
   Eigen::MatrixXd getFullPointCloud();
   Eigen::MatrixXd getROIPointCloud();
   Eigen::MatrixXd getRANSACPointCloud();
@@ -53,6 +55,7 @@ class Attention {
   double CalculateConeRadius(Eigen::MatrixXd &potentialConePointCloud);
   double GetZRange(Eigen::MatrixXd &potentialConePointCloud);
   void SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &coneIndexList);
+  void moveCone(Cone &cone);
   Eigen::Vector3f Cartesian2Spherical(double &x, double &y, double &z);
   Eigen::MatrixXd RANSACRemoveGround(Eigen::MatrixXd);
   Eigen::MatrixXd layerRemoveGround(std::vector<Eigen::MatrixXd>);
@@ -97,8 +100,10 @@ class Attention {
   double m_zRangeThreshold = {};
   bool m_verbose = {};
   cluon::data::TimeStamp m_CPCReceivedLastTime;
+  cluon::data::TimeStamp m_previousTimeStamp = {};
   double m_algorithmTime;
   Eigen::MatrixXd m_generatedTestPointCloud;
+  double m_saveDistance = 0;
   // RANSAC thresholds
   double m_inlierRangeThreshold;
   double m_inlierFoundTreshold;
@@ -107,6 +112,14 @@ class Attention {
   uint32_t m_senderStamp = 0;
   Eigen::MatrixXd m_lastBestPlane;
   std::vector<std::pair<bool, Cone>> m_coneFrame = {};
+
+  /*yaw and groundspeed*/
+  double m_yawRate = 0;
+  std::mutex m_yawMutex = {};
+  cluon::data::TimeStamp m_yawReceivedTime = {};
+  double m_groundSpeed = 0;
+  std::mutex m_speedMutex = {};
+  cluon::data::TimeStamp m_speedReceivedTime = {};
 
   /*For sending to the drawer*/
   std::mutex m_drawerMutex = {};

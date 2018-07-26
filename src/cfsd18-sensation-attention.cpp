@@ -44,6 +44,7 @@ int32_t main(int32_t argc, char **argv) {
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     uint32_t attentionStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["id"]));
     uint32_t stateMachineStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["stateMachineId"]));
+    uint32_t estimationStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["estimationId"]));
     Attention attention(commandlineArguments,od4);
     int pointCloudMessages = 0;
     bool readyState = false;
@@ -68,6 +69,25 @@ int32_t main(int32_t argc, char **argv) {
         }
       }
     };
+
+    auto yawRateEnvelope{[&senser = attention, senderStamp = estimationStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          senser.nextYawRate(envelope);
+        }
+      }
+    };
+
+    auto groundSpeedEnvelope{[&senser = attention, senderStamp = estimationStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          senser.nextGroundSpeed(envelope);
+        }
+      }
+    };
+
+    od4.dataTrigger(opendlv::proxy::AngularVelocityReading::ID(),yawRateEnvelope);
+    od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),groundSpeedEnvelope);
     od4.dataTrigger(opendlv::proxy::PointCloudReading::ID(),envelopeRecieved);
     od4.dataTrigger(opendlv::proxy::SwitchStateReading::ID(),stateMachineStatusEnvelope);
 

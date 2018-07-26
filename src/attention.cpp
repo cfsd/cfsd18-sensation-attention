@@ -58,6 +58,7 @@ void Attention::nextContainer(cluon::data::Envelope data)
       cluon::data::TimeStamp TimeBeforeAlgorithm;
       m_CPCReceived = true;
       cluon::data::TimeStamp ts = data.sampleTimeStamp();
+      m_previousTimeStamp = m_CPCReceivedLastTime;
       m_CPCReceivedLastTime = ts;
       {
         std::lock_guard<std::mutex> lockCPC(m_cpcMutex);
@@ -83,6 +84,19 @@ void Attention::nextContainer(cluon::data::Envelope data)
     }
   }
 }
+void Attention::nextYawRate(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockYaw(m_yawMutex);
+  auto yawRate = cluon::extractMessage<opendlv::proxy::AngularVelocityReading>(std::move(data));
+  m_yawRate = yawRate.angularVelocityZ();
+  m_yawReceivedTime = data.sampleTimeStamp();
+}
+void Attention::nextGroundSpeed(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockGroundSpeed(m_speedMutex);
+  auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(data));
+  m_groundSpeed = groundSpeed.groundSpeed();
+  m_speedReceivedTime = data.sampleTimeStamp();
+}
+
 
 void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
 {
@@ -101,6 +115,7 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   m_senderStamp = std::stoi(commandlineArguments["id"]);
   m_verbose = commandlineArguments.count("verbose") != 0;
   m_readyStateMachine = std::stoi(commandlineArguments["readyStateMachine"]) == 1;
+  m_saveDistance = std::stod(commandlineArguments["saveDistance"]);
   //RANSAC parameters, not used atm
   m_inlierRangeThreshold = std::stod(commandlineArguments["inlierRangeThreshold"]);
   m_inlierFoundTreshold = std::stod(commandlineArguments["inlierFoundThreshold"]);
@@ -525,7 +540,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     conePositionZ = conePositionZ / numberOfPointsOnCone;
     //conePoints.row(i) << conePositionX,conePositionY,conePositionZ;
 
-    Cone objectToValidate = Cone(conePositionX,conePositionY,conePositionZ);
+    Cone objectToValidate = Cone(conePositionX,conePositionY,conePositionZ,m_saveDistance);
     std::pair<bool, Cone> objectPair = std::pair<bool, Cone>(false,objectToValidate);
 
     if(m_validCones == 0){
@@ -584,10 +599,11 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       }
       if(!m_coneFrame[i].first && m_coneFrame[i].second.shouldBeInFrame()){  
         //std::cout << "is not matched but should be in frame | curr X: " << m_coneFrame[i].second.getX() << " shift: "  << posShiftX/m<< std::endl;
-        double x = m_coneFrame[i].second.getX() - posShiftX/m;
-        double y = m_coneFrame[i].second.getY() - posShiftY/m;
-        m_coneFrame[i].second.setX(x);
-        m_coneFrame[i].second.setY(y);
+        //double x = m_coneFrame[i].second.getX() - posShiftX/m;
+        //double y = m_coneFrame[i].second.getY() - posShiftY/m;
+        moveCone(m_coneFrame[i].second);
+        //m_coneFrame[i].second.setX(x);
+        //m_coneFrame[i].second.setY(y);
         sentCounter++;    
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
@@ -604,6 +620,22 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
   SendEnvelopes(m_sentCones);
 }
 
+void Attention::moveCone(Cone &cone){
+  double delta = cluon::time::deltaInMicroseconds(m_CPCReceivedLastTime,m_previousTimeStamp)/1000000.0;
+  double rotation = m_yawRate*delta;
+  double speed = m_groundSpeed*delta;
+  std::cout << "delta: " << delta << std::endl;
+  std::cout << "speed: " << m_groundSpeed << std::endl;
+  double x = cone.getX();
+  double y = cone.getY();
+  double newX = x*cos(-rotation)-y*sin(-rotation);
+  double newY = y*cos(-rotation)+x*sin(-rotation);
+  newY = newY-speed;
+  cone.setX(newX);
+  cone.setY(newY);
+  std::cout << "x :" << x << "y: " << y << "newX: " << newX << "newY: " << newY << std::endl;
+}
+
 void Attention::SendEnvelopes(std::vector<Cone> cones){
   double totalAzimuth=0;
   for(uint32_t i = 0; i<cones.size(); i++){
@@ -613,6 +645,10 @@ void Attention::SendEnvelopes(std::vector<Cone> cones){
     double z = cones[index].getZ();
     Eigen::Vector3f conePoint = Cartesian2Spherical(x,y,z);
     totalAzimuth = totalAzimuth+conePoint(1);
+    if(std::isnan(conePoint(0)) || std::isnan(conePoint(1)) || std::isnan(conePoint(2))){
+      std::cout << "WARNING!! NaN values " << std::endl;
+      break;
+    }
     //std::chrono::system_clock::time_point tp = m_CPCReceivedLastTime;
     //cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
     opendlv::logic::perception::ObjectDirection coneDirection;

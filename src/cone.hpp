@@ -27,7 +27,7 @@
 
 class Cone{
   public:
-    Cone(double x, double y, double z);
+    Cone(double x, double y, double z, double saveDistance);
     ~Cone() = default;
     
 
@@ -56,6 +56,7 @@ class Cone{
     int m_hits;
     int m_missHit;
     bool m_isValid;
+    double m_saveDistance;
     const double RAD2DEG = 57.295779513082325; // 1.0 / DEG2RAD;
 
 };
