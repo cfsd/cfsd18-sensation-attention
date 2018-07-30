@@ -42,10 +42,12 @@ int32_t main(int32_t argc, char **argv) {
     cluon::data::Envelope data;
     //std::shared_ptr<Slam> slammer = std::shared_ptr<Slam>(new Slam(10));
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
+    cluon::OD4Session od4can{static_cast<uint16_t>(std::stoi(commandlineArguments["cidCan"]))};
     uint32_t attentionStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["id"]));
     uint32_t stateMachineStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["stateMachineId"]));
     uint32_t estimationStamp = static_cast<uint32_t>(std::stoi(commandlineArguments["estimationId"]));
-    Attention attention(commandlineArguments,od4);
+    uint32_t speedStamp = 114;
+    Attention attention(commandlineArguments,od4,od4can);
     int pointCloudMessages = 0;
     bool readyState = false;
     auto envelopeRecieved{[&senser = attention, &ready = readyState, &counter = pointCloudMessages](cluon::data::Envelope &&envelope)
@@ -78,7 +80,7 @@ int32_t main(int32_t argc, char **argv) {
       }
     };
 
-    auto groundSpeedEnvelope{[&senser = attention, senderStamp = estimationStamp](cluon::data::Envelope &&envelope)
+    auto groundSpeedEnvelope{[&senser = attention, senderStamp = speedStamp](cluon::data::Envelope &&envelope)
       {
         if(envelope.senderStamp() == senderStamp){
           senser.nextGroundSpeed(envelope);

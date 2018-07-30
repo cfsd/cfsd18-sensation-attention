@@ -23,8 +23,9 @@
 
 #include "attention.hpp"
 
-Attention::Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
+Attention::Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4, cluon::OD4Session &od4can) :
     m_od4(od4)
+  , m_od4can(od4can)
   , m_cpcMutex()
   , m_stateMachineMutex()
   , m_CPCReceived(false)
@@ -604,7 +605,6 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         moveCone(m_coneFrame[i].second);
         //m_coneFrame[i].second.setX(x);
         //m_coneFrame[i].second.setY(y);
-        sentCounter++;    
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
       else if(m_coneFrame[i].first){
@@ -618,22 +618,22 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     }
   }//loop
   SendEnvelopes(m_sentCones);
+  SendToCan(sentCounter);
 }
 
 void Attention::moveCone(Cone &cone){
   double delta = cluon::time::deltaInMicroseconds(m_CPCReceivedLastTime,m_previousTimeStamp)/1000000.0;
   double rotation = m_yawRate*delta;
   double speed = m_groundSpeed*delta;
-  std::cout << "delta: " << delta << std::endl;
-  std::cout << "speed: " << m_groundSpeed << std::endl;
-  double x = cone.getX();
-  double y = cone.getY();
-  double newX = x*cos(-rotation)-y*sin(-rotation);
-  double newY = y*cos(-rotation)+x*sin(-rotation);
-  newY = newY-speed;
-  cone.setX(newX);
-  cone.setY(newY);
-  std::cout << "x :" << x << "y: " << y << "newX: " << newX << "newY: " << newY << std::endl;
+  if(fabs(speed)>0.001 && fabs(rotation)>0.00001){
+    double x = cone.getX();
+    double y = cone.getY();
+    double newX = x*cos(-rotation)-y*sin(-rotation);
+    double newY = y*cos(-rotation)+x*sin(-rotation);
+    newY = newY-speed;
+    cone.setX(newX);
+    cone.setY(newY);
+  }
 }
 
 void Attention::SendEnvelopes(std::vector<Cone> cones){
@@ -663,6 +663,12 @@ void Attention::SendEnvelopes(std::vector<Cone> cones){
     //std::cout << "Sending cone with ID " << index << std::endl;
   }
   m_direction = totalAzimuth/cones.size()*DEG2RAD;
+}
+
+void Attention::SendToCan(int nCones){
+  opendlv::proxy::SwitchStateReading coneMessage;
+  coneMessage.state(nCones);
+  m_od4can.send(coneMessage,m_CPCReceivedLastTime,1411);
 }
 
 Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)

@@ -29,7 +29,7 @@
 
 class Attention {
  public:
-  Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4);
+  Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4, cluon::OD4Session &od4can);
   Attention(Attention const &) = delete;
   Attention &operator=(Attention const &) = delete;
   ~Attention();
@@ -64,6 +64,7 @@ class Attention {
   double getClusterMeanHeight(std::vector<uint32_t>);
   Eigen::MatrixXd RemoveDuplicates(Eigen::MatrixXd);
   void SendEnvelopes(std::vector<Cone> cones);
+  void SendToCan(int nCones);
   bool PointInROI(double x,double y,double z);
   bool InExtendedROI(double x,double y,double z);
 
@@ -79,6 +80,7 @@ class Attention {
   const double DEG2RAD = 0.017453292522222; // PI/180.0
   const double RAD2DEG = 57.295779513082325; // 1.0 / DEG2RAD;
   cluon::OD4Session &m_od4;
+  cluon::OD4Session &m_od4can;
   std::mutex m_cpcMutex;
   std::mutex m_stateMachineMutex;
   bool m_CPCReceived;//Set to true when the first compact point cloud is received
