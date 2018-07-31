@@ -23,8 +23,9 @@
 
 #include "attention.hpp"
 
-Attention::Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
+Attention::Attention(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4, cluon::OD4Session &od4can) :
     m_od4(od4)
+  , m_od4can(od4can)
   , m_cpcMutex()
   , m_stateMachineMutex()
   , m_CPCReceived(false)
@@ -100,6 +101,7 @@ void Attention::setUp(std::map<std::string, std::string> commandlineArguments)
   m_zRangeThreshold = std::stod(commandlineArguments["zRangeThreshold"]);
   m_senderStamp = std::stoi(commandlineArguments["id"]);
   m_verbose = commandlineArguments.count("verbose") != 0;
+  m_acceleration = commandlineArguments.count("acceleration") != 0;
   m_readyStateMachine = std::stoi(commandlineArguments["readyStateMachine"]) == 1;
   //RANSAC parameters, not used atm
   m_inlierRangeThreshold = std::stod(commandlineArguments["inlierRangeThreshold"]);
@@ -508,6 +510,8 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
   if(m_validCones == 0){
       m_coneFrame.clear();
   }
+  std::lock_guard<std::mutex> lock(m_drawerMutex);
+  m_sentCones.clear();
   for (uint32_t i = 0; i < numberOfCones; i++)
   {
     uint32_t numberOfPointsOnCone = coneIndexList[i].size();
@@ -526,6 +530,9 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     //conePoints.row(i) << conePositionX,conePositionY,conePositionZ;
 
     Cone objectToValidate = Cone(conePositionX,conePositionY,conePositionZ);
+    if(m_acceleration){
+      m_sentCones.push_back(objectToValidate);
+    }
     std::pair<bool, Cone> objectPair = std::pair<bool, Cone>(false,objectToValidate);
 
     if(m_validCones == 0){
@@ -572,8 +579,11 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       }
     }   //std::cout << "Cone Sent" << std::endl;//std::cout << "a point sent out with distance: " <<conePoint.getDistance() <<"; azimuthAngle: " << conePoint.getAzimuthAngle() << "; and zenithAngle: " << conePoint.getZenithAngle() << std::endl;
   }
-  std::lock_guard<std::mutex> lock(m_drawerMutex);
-  m_sentCones.clear();
+  if(m_acceleration){
+    SendEnvelopes(m_sentCones);
+    SendToCan(static_cast<int>(numberOfCones));
+    return;
+  }
   int sentCounter = 0;
   for(uint32_t i = 0; i < m_coneFrame.size(); i++){
     if(m_coneFrame[i].second.isValid()){
@@ -588,7 +598,6 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         double y = m_coneFrame[i].second.getY() - posShiftY/m;
         m_coneFrame[i].second.setX(x);
         m_coneFrame[i].second.setY(y);
-        sentCounter++;    
         m_sentCones.push_back(m_coneFrame[i].second);         
       }
       else if(m_coneFrame[i].first){
@@ -602,6 +611,13 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     }
   }//loop
   SendEnvelopes(m_sentCones);
+  SendToCan(sentCounter);
+}
+
+void Attention::SendToCan(int nCones){
+  opendlv::proxy::SwitchStateReading coneMessage;
+  coneMessage.state(nCones);
+  m_od4can.send(coneMessage,m_CPCReceivedLastTime,1411);
 }
 
 void Attention::SendEnvelopes(std::vector<Cone> cones){
