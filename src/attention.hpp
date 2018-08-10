@@ -40,6 +40,7 @@ class Attention {
   std::vector<Cone> getSentCones();
   void setReadyState(bool state);
   void setStateMachineStatus(cluon::data::Envelope data);
+  void dumpToFile();
 
  private:
   void setUp(std::map<std::string, std::string> commandlineArguments); 
@@ -123,6 +124,10 @@ class Attention {
   bool m_readyState = false;
   bool m_readyStateMachine = false;
   double m_direction = 0;
+  std::vector<double> m_maxDistances = {};
+
+  std::vector<double> m_timeVector = {};
+  std::vector<int> m_nConesVector = {};
 
 
 };

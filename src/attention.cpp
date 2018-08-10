@@ -78,6 +78,7 @@ void Attention::nextContainer(cluon::data::Envelope data)
      // m_algorithmTime = timeForProcessingOneScan;
 
       m_algorithmTime = fabs(static_cast<double>(cluon::time::deltaInMicroseconds(TimeAfterAlgorithm, TimeBeforeAlgorithm)));
+      m_timeVector.push_back(m_algorithmTime);
       if(m_verbose){
         std::cout << "Time for processing one scan of data is: " << m_algorithmTime/1000000 << "s" << std::endl;
       }
@@ -214,12 +215,12 @@ void Attention::ConeDetection(){
     //std::cout << "Time elapsed for NNSegmentation: " << timeElapsed << std::endl;
     startTime = processTime3;
     std::vector<std::vector<uint32_t>> coneIndexList = FindConesFromObjects(pcRefit, objectIndexList);
-    cluon::data::TimeStamp processTime4 = cluon::time::convert(std::chrono::system_clock::now());
     //timeElapsed = fabs(static_cast<double>(processTime4.microseconds()-startTime.microseconds())/1000000.0);
     //std::cout << "Time elapsed for Cone Detection: " << timeElapsed << std::endl;
-    startTime = processTime4;
+    //startTime = processTime4;
     //std::cout << "Number of Cones is: " << coneIndexList.size() << std::endl;
     SendingConesPositions(pcRefit, coneIndexList);
+    cluon::data::TimeStamp processTime4 = cluon::time::convert(std::chrono::system_clock::now());
   }
 }
 
@@ -530,10 +531,10 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
     //conePoints.row(i) << conePositionX,conePositionY,conePositionZ;
 
     Cone objectToValidate = Cone(conePositionX,conePositionY,conePositionZ);
-    if(m_acceleration){
-      m_sentCones.push_back(objectToValidate);
-    }
-    std::pair<bool, Cone> objectPair = std::pair<bool, Cone>(false,objectToValidate);
+    //if(m_acceleration){
+    //  m_sentCones.push_back(objectToValidate);
+    //}
+    std::pair<bool, Cone> objectPair = std::pair<bool, Cone>(m_acceleration,objectToValidate);
 
     if(m_validCones == 0){
         //std::cout << "in empty frame" << std::endl;
@@ -575,14 +576,10 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
         k++;
       }
       if(!foundMatch){
+        objectPair.first = false;
         m_coneFrame.push_back(objectPair);
       }
     }   //std::cout << "Cone Sent" << std::endl;//std::cout << "a point sent out with distance: " <<conePoint.getDistance() <<"; azimuthAngle: " << conePoint.getAzimuthAngle() << "; and zenithAngle: " << conePoint.getZenithAngle() << std::endl;
-  }
-  if(m_acceleration){
-    SendEnvelopes(m_sentCones);
-    SendToCan(static_cast<int>(numberOfCones));
-    return;
   }
   int sentCounter = 0;
   for(uint32_t i = 0; i < m_coneFrame.size(); i++){
@@ -603,7 +600,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
       else if(m_coneFrame[i].first){
         sentCounter++;
         m_coneFrame[i].first = false;
-        m_sentCones.push_back(m_coneFrame[i].second);         
+        m_sentCones.push_back(m_coneFrame[i].second);  
       }
       if(!m_coneFrame[i].first){
         m_coneFrame[i].second.addMiss();
@@ -612,6 +609,7 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
   }//loop
   SendEnvelopes(m_sentCones);
   SendToCan(sentCounter);
+  m_nConesVector.push_back(sentCounter);
 }
 
 void Attention::SendToCan(int nCones){
@@ -622,6 +620,7 @@ void Attention::SendToCan(int nCones){
 
 void Attention::SendEnvelopes(std::vector<Cone> cones){
   double totalAzimuth=0;
+  double maxDistance = 0;
   for(uint32_t i = 0; i<cones.size(); i++){
     uint32_t index = cones.size()-1-i;
     double x = cones[index].getX();
@@ -639,10 +638,14 @@ void Attention::SendEnvelopes(std::vector<Cone> cones){
     opendlv::logic::perception::ObjectDistance coneDistance;
     coneDistance.objectId(index);
     coneDistance.distance(conePoint(0));
+    if(conePoint(0)>maxDistance){
+      maxDistance = conePoint(0);
+    }
     m_od4.send(coneDistance,m_CPCReceivedLastTime,m_senderStamp);
     //std::cout << "Sending cone with ID " << index << std::endl;
   }
   m_direction = totalAzimuth/cones.size()*DEG2RAD;
+  m_maxDistances.push_back(maxDistance);
 }
 
 Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)
@@ -830,4 +833,27 @@ Eigen::MatrixXd Attention::getRANSACPointCloud(){
 std::vector<Cone> Attention::getSentCones(){
   std::lock_guard<std::mutex> lock(m_drawerMutex);
   return m_sentCones;
+}
+
+void Attention::dumpToFile(){
+  std::string filePathTime = "/opt/files/Time.txt";
+	std::ofstream f;
+  f.open(filePathTime.c_str());
+	for(uint32_t i = 0; i<m_timeVector.size(); i++){
+		f << std::setprecision(6) << m_timeVector[i] << std::endl;
+	}
+	f.close();
+  std::string filePathCones = "/opt/files/Cones.txt";
+  f.open(filePathCones.c_str());
+  for(uint32_t i = 0; i<m_nConesVector.size(); i++){
+		f << std::setprecision(6) << m_nConesVector[i] << std::endl;
+	}
+	f.close();
+  std::string filePathDistance = "/opt/files/distance.txt";
+  f.open(filePathDistance.c_str());
+  for(uint32_t i = 0; i<m_maxDistances.size(); i++){
+		f << std::setprecision(6) << m_maxDistances[i] << std::endl;
+	}
+	f.close();
+  std::cout << "files written" << std::endl;
 }

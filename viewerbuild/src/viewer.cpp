@@ -24,7 +24,7 @@ void Viewer::Run(){
     pangolin::CreatePanel("menu").SetBounds(0.0,1.0,0.0,pangolin::Attach::Pix(175));
     pangolin::Var<bool> menuShowRawPoints("menu.ShowRawPoints",true,true);
     pangolin::Var<bool> menuShowROIPoints("menu.ShowROI",true,true);
-    pangolin::Var<bool> menuShowRANSACPoints("menu.ShowRANSAC",true,true);
+    pangolin::Var<bool> menuShowRANSACPoints("menu.HideGround",true,true);
     pangolin::Var<bool> menuShowCones("menu.Show Cones",true,true);
     pangolin::Var<bool> menuExit("menu.Exit",false,false);
 

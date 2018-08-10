@@ -88,7 +88,7 @@ bool Cone::isThisMe(double x, double y){
   //double diffX = std::abs(m_x - x);
   //double diffY = std::abs(m_y - y);
   double distance = std::sqrt( (m_x - x)*(m_x - x) + (m_y - y)*(m_y - y) );
-  if(distance < 1){return true;}else{return false;}
+  if(distance < 2){return true;}else{return false;}
 
 }
 

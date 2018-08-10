@@ -48,15 +48,16 @@ int32_t main(int32_t argc, char **argv) {
     Attention attention(commandlineArguments,od4,od4can);
     int pointCloudMessages = 0;
     bool readyState = false;
-    auto envelopeRecieved{[&senser = attention, &ready = readyState, &counter = pointCloudMessages](cluon::data::Envelope &&envelope)
+    auto envelopeRecieved{[&senser = attention, &ready = readyState, &pointCloudMessages](cluon::data::Envelope &&envelope)
       {
+        pointCloudMessages++;
         senser.nextContainer(envelope);
         if(!ready){
-          if(counter > 20){
+          if(pointCloudMessages > 20){
             ready = true;
             senser.setReadyState(ready);  
             std::cout << "Attention Ready .." << std::endl;        
-          }else{counter++;}
+          }
         }    
       } 
     };
@@ -74,6 +75,7 @@ int32_t main(int32_t argc, char **argv) {
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
+    int lastPointCloudMessages = 0;
     
     while (od4.isRunning()) {
 
@@ -82,8 +84,12 @@ int32_t main(int32_t argc, char **argv) {
         ssm.code(1);
         cluon::data::TimeStamp sampleTime = cluon::time::now();
         od4.send(ssm, sampleTime ,attentionStamp);
+        if(pointCloudMessages == lastPointCloudMessages){
+          attention.dumpToFile();
+        }
       }
-      std::this_thread::sleep_for(0.1s);
+      lastPointCloudMessages = pointCloudMessages;
+      std::this_thread::sleep_for(1.0s);
       std::chrono::system_clock::time_point tp;
     }
   }
