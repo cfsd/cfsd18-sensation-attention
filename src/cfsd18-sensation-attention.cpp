@@ -85,7 +85,7 @@ int32_t main(int32_t argc, char **argv) {
         cluon::data::TimeStamp sampleTime = cluon::time::now();
         od4.send(ssm, sampleTime ,attentionStamp);
         if(pointCloudMessages == lastPointCloudMessages){
-          attention.dumpToFile();
+          //attention.dumpToFile();
         }
       }
       lastPointCloudMessages = pointCloudMessages;
