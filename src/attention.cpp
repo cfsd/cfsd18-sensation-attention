@@ -276,7 +276,15 @@ Eigen::MatrixXd Attention::layerRemoveGround(std::vector<Eigen::MatrixXd> pointC
   }
   return filteredClusterEigen;
 }
-
+/*
+filterClusters takes in a vector of all the clusters gathered from the point cloud, 
+It then filter out all ground clusters by evaluating the mean distance, 
+cluster size and potential max distance( should not be larger than a cone diameter)
+and more ...
+A important evaluation is the 'clusterMeanDistance<groundDistance-m_groundClusterDistance' which is a robustness check to remove 
+noise in the cluster which could be classified as a cone.
+The function returns notFloorIndex which is the set of points in the pointcloud that are evaluated as NOT ground.
+*/
 std::vector<uint32_t> Attention::filterClusters(std::vector<std::vector<uint32_t>> clusterVector){
   std::vector<uint32_t> notFloorIndex;
   //double groundHeight = -0.5;
@@ -321,6 +329,13 @@ double Attention::getClusterMeanHeight(std::vector<uint32_t> thisCluster){
   return height/size;  
 }
 
+/*
+This is a nearest neighbour algorithm which searches the nearest member of a point in the pointcloud
+to the current point. It is only based on the ecluidean distance.
+This is a lightweight version of the nearest neightbour algorithm which only searches for the single nearest point
+under the set input threshold. Normally this algorithm should take ALL neightbours for each point and then in the next iteraions
+evaluate ALL neightbours for the new points added. This function only takes the nearest which speed things up.
+*/
 std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &pointCloudConeROI){
   uint32_t numberOfPointConeROI = pointCloudConeROI.rows();
   //std::cout << "pc in NN: " << pointCloudConeROI.rows() << std::endl;
@@ -375,6 +390,11 @@ std::vector<std::vector<uint32_t>> Attention::NNSegmentation(Eigen::MatrixXd &po
   return objectIndexList;
 }
 
+/*
+FindConesFromObject classifies Cones from the point cloud ROI(Region of Interest)
+The clusters are evaluated by size, radius, Z distance.
+The thresholds are different for cone candidates that are far away and those who are closer
+*/
 std::vector<std::vector<uint32_t>> Attention::FindConesFromObjects(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &objectIndexList)
 {
   uint32_t numberOfObjects = objectIndexList.size();
@@ -439,7 +459,14 @@ double Attention::GetZRange(Eigen::MatrixXd &potentialConePointCloud)
   return zRange;
 }
 
+/*
+-----------------------THIS CAN BE REMOVED------------------------
+If the ground removal is improved this function can be removed. The ground removal can be improved by separating the layers of the point cloud
+into segments and then evaluate each segment. Currently it is evaluated layer by layer, by separate the layers into segments 
+a more robust ground removal can be achieved. The current algorithm have a hard time with acline of the ground which can be solved with smaller layer segments
+This functions removes all points outside a x and y threshold
 
+*/
 Eigen::MatrixXd Attention::ExtractConeROI(Eigen::MatrixXd pointCloudFromGM){
   uint32_t numberOfPointsCPC = pointCloudFromGM.rows();
   uint32_t numberOfPointConeROI = 0;
@@ -471,7 +498,12 @@ bool Attention::PointInROI(double x,double y,double z){
     return false;
   }
 }
-
+/*
+-----------THIS CAN BE REMOVED-----------------
+If the ground removal is improved this can be remove.
+IsExtendedROI extends the region of intrest based on the mean angle of the last frame.
+This was implemented to dynamically change the region of interes at tight corners
+*/
 bool Attention::InExtendedROI(double x,double y,double z){
   if(m_direction>0){
     x=x-m_xBoundary;
@@ -493,7 +525,14 @@ double Attention::CalculateXYDistance(Eigen::MatrixXd &pointCloud, const uint32_
   double distance = sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2));
   return distance;
 }
-
+/*
+SendingConesPositions has two primary tasks.
+1. It updates the cone list. if a cone in the current frame matches with a cone in the
+cone list a hit will be added. If it is evaluated as a new cone it will be added to the cone list
+cones are set invalid based on position. the shift in position is evaluated by taking the mean x and y difference of
+each matched cone. if a cone is "behind the car" the cone becomes invalid
+2.Send the cones out to SLAM and DetectConeLane
+*/
 void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::vector<std::vector<uint32_t>> &coneIndexList)
 {
   int m = 0;
@@ -612,6 +651,9 @@ void Attention::SendingConesPositions(Eigen::MatrixXd &pointCloudConeROI, std::v
   m_nConesVector.push_back(sentCounter);
 }
 
+/*
+Sends out the amount of cones found for each frame
+*/
 void Attention::SendToCan(int nCones){
   opendlv::proxy::SwitchStateReading coneMessage;
   coneMessage.state(nCones);
@@ -658,6 +700,9 @@ Eigen::Vector3f Attention::Cartesian2Spherical(double &x, double &y, double &z)
   return pointInSpherical;
 }
 
+/*
+---------------------------RANSAC IS NOT USED AND IT CAN BE REMOVED!!---------------------------------
+*/
 Eigen::MatrixXd Attention::RANSACRemoveGround(Eigen::MatrixXd pointCloudInRANSAC)
 {
 
@@ -789,7 +834,9 @@ Eigen::MatrixXd Attention::RANSACRemoveGround(Eigen::MatrixXd pointCloudInRANSAC
   return pcRefit;
 
 }
-
+/*
+-----------------REMOVE DUPLICATES IS A FUNCTION CONNECTED TO RANSAC AND CAN ALSO BE REMOVED-------------------
+*/
 Eigen::MatrixXd Attention::RemoveDuplicates(Eigen::MatrixXd needSorting)
 {
 
@@ -815,6 +862,9 @@ Eigen::MatrixXd Attention::RemoveDuplicates(Eigen::MatrixXd needSorting)
 
 }
 
+/*
+These getters are for visualizing the resluts of Attention
+*/
 Eigen::MatrixXd Attention::getFullPointCloud(){
   std::lock_guard<std::mutex> lock(m_cpcMutex);
   return m_pointCloud;
