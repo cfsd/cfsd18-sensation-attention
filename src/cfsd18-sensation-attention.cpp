@@ -80,6 +80,7 @@ int32_t main(int32_t argc, char **argv) {
     while (od4.isRunning()) {
 
       if(readyState){
+        //Sends out heartbeat
         opendlv::system::SignalStatusMessage ssm;
         ssm.code(1);
         cluon::data::TimeStamp sampleTime = cluon::time::now();
