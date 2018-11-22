@@ -83,6 +83,12 @@ int Cone::getMisses(){
   return m_missHit;
 }
 
+/*
+IsThisMe inputs a cone in the current frame and evaluates the plausability
+of the cone being the same as the cone saved in this class. it is based on
+a distance threshold and the assumption is that the cone should not be further
+away than 2 m per frame (ecluidean distance) to be classified as a match
+*/
 bool Cone::isThisMe(double x, double y){
 
   //double diffX = std::abs(m_x - x);
@@ -91,12 +97,18 @@ bool Cone::isThisMe(double x, double y){
   if(distance < 2){return true;}else{return false;}
 
 }
-
+/*
+shouldBeInFrame is a sanity check which checks if a cone is not in the current frame
+but in the last frame was in a prominent position the actually be in the next frame.
+if it should be in the frame this cone is projected instead.
+*/
 bool Cone::shouldBeInFrame(){
 
   if(m_hits >= 3 && m_y > 0 && m_missHit < 2 && m_isValid){return true;}else{return false;}
 }
-
+/*
+Checks if this cone should be removed and sets its valid state in attention.
+*/
 bool Cone::shouldBeRemoved(){
 
   if(m_missHit >= 2 || m_y < 0 ){return true;}else{return false;}
